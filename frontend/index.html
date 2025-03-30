@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>WhatsApp Chat Stats</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Top Section: Dark background for controls -->
+  <div class="top-section">
+    <!-- Parallax Background -->
+    <div class="parallax-bg"></div>
+    
+    <!-- Interactive Controls -->
+    <div class="controls">
+        <h1>WhatsApp Chat Statistics</h1>
+        <div class="file-controls">
+            <input type="file" id="fileInput" accept=".txt, .zip">
+            <button id="processButton">Process File</button>
+        </div>
+        <div class="region-select">
+            <label for="regionSelect">Date Format:</label>
+            <select id="regionSelect">
+                <option value="EU">EU</option>
+                <option value="US">US</option>
+            </select>
+        </div>
+    </div>
+  </div>
+
+  <!-- Bottom Section: Light background for results and charts -->
+  <div class="container">
+    <div id="results"></div>
+
+    <!-- Timeline Section: Date & Times charts -->
+    <div id="timelineSection">
+      <div class="chart-container">
+          <!-- Column Chart (Evolution over time) -->
+          <div id="personSelectionContainer"></div>
+          <div class="spacer"></div>
+          <div id="columnchartdiv"></div>
+          <div class="spacer"></div>
+          <div id="monthlychartdiv"></div>
+          <div class="spacer"></div>
+          <!-- Weekday Chart -->
+          <div id="weekdaychartdiv"></div>
+          <!-- Spacer -->
+          <div class="spacer"></div>
+          <!-- Hourly Chart -->
+          <div id="hourlychartdiv"></div>
+          <!-- Legend Container for stacked charts -->
+          <div id="legendContainer"></div>
+      </div>
+    </div>
+
+    <!-- Chat Analytics Section -->
+    <div id="chatAnalyticsSection">
+      <!-- The title will be inserted dynamically once the file is processed -->
+      <div id="personBoxesContainer">
+          <!-- Person boxes will be dynamically added here -->
+      </div>
+
+      <!-- Communal Words Section -->
+      <div id="communalWordsContainer">
+        <div id="communalWords"></div>
+      </div>
+
+      <!-- Floating Emojis Section -->
+      <div id="floatingEmojisContainer">
+        <div id="floatingEmojis"></div>
+      </div>
+    </div>
+
+    <!-- Content Analysis Section -->
+    <div id="contentAnalysisSection">
+      <!-- Content Analysis stats will be dynamically added here -->
+    </div>
+  </div>
+
+    <!-- AI Analysis Section -->
+  <!-- <div id="aiAnalysisSection">
+    <h2 class="title subtitle">AI Analysis</h2>
+    <div id="aiAnalysisContainer">
+      <button id="aiAnalysisButton" class="ai-button">Analyze with AI</button>
+      <div id="aiResultsContainer" class="ai-results-container"></div>
+    </div>
+  </div> -->
+  <!-- Dummy content to ensure scrolling -->
+  <div style="height: 2000px;"></div>
+
+  <!-- Include amCharts -->
+  <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+  <script src="https://cdn.amcharts.com/lib/5/xy.js"></script>
+  <script src="https://cdn.amcharts.com/lib/5/percent.js"></script>
+  <script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
+
+  <!-- Include JSZip for ZIP file support -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
+  <script type="module" src="fileProcessor.js"></script>
+  <script src="chartRenderer.js"></script>
+  <script src="parallax.js"></script>
+</body>
+</html>
