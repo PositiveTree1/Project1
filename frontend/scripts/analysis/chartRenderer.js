@@ -1,3 +1,4 @@
+
 function renderStackedColumnChart(columnChartData, callback) {
     // Retrieve original data and sender list
     const originalData = columnChartData.data;
@@ -72,13 +73,17 @@ function renderStackedColumnChart(columnChartData, callback) {
     const dataset = {
         label: "Average Messages",
         data: averageData,
-        borderColor: "#36A2EB", // Default color, adjust as needed
+        borderColor: "#a044ff", // var(--secondary-color)
+        backgroundColor: "rgba(106, 48, 147, 0.1)", // var(--primary-color) with opacity
         borderWidth: 3,
         tension: 0.3,
         pointRadius: 0,
         borderCapStyle: 'round',
         borderJoinStyle: 'round',
-        fill: false
+        fill: {
+            target: 'origin',
+            above: 'rgba(106, 48, 147, 0.1)' // var(--primary-color) with opacity
+        }
     };
 
     // Create the Chart.js line chart with no legend
@@ -181,13 +186,17 @@ function renderHourlyChart(hourlyData) {
     const dataset = {
         label: "Average Messages",
         data: averageData,
-        borderColor: "#36A2EB", // Default color, adjust as needed
+        borderColor: "#a044ff", // --secondary-color
+        backgroundColor: "rgba(106, 48, 147, 0.1)", // --primary-color with 10% opacity
         borderWidth: 3,
         tension: 0.3,
         pointRadius: 0,
         borderCapStyle: 'round',
         borderJoinStyle: 'round',
-        fill: false
+        fill: {
+            target: 'origin',
+            above: "rgba(106, 48, 147, 0.1)" // --primary-color with 10% opacity
+        }
     };
 
     // Create the chart with custom tick settings on the x-axis
@@ -203,16 +212,26 @@ function renderHourlyChart(hourlyData) {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: false,
-                    
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: '#6a3093', // --primary-color
+                    titleColor: '#fff',
+                    bodyColor: '#f3e5ff', // --accent-color
+                    borderColor: '#a044ff', // --secondary-color
+                    borderWidth: 1
                 }
             },
             scales: {
                 x: {
                     display: true,
                     title: { display: false },
-                    grid: { display: false },
+                    grid: { 
+                        display: false,
+                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
+                    },
                     ticks: {
+                        color: '#6a3093', // --primary-color
                         autoSkip: false,
                         maxRotation: 0,
                         minRotation: 0,
@@ -230,7 +249,13 @@ function renderHourlyChart(hourlyData) {
                 y: {
                     display: true,
                     title: { display: false },
-                    grid: { display: false },
+                    grid: { 
+                        display: false,
+                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
+                    },
+                    ticks: {
+                        color: '#6a3093' // --primary-color
+                    },
                     min: 0
                 }
             }
@@ -264,7 +289,6 @@ function renderWeekdayChart(weekdayData) {
         container.style.margin = "20px auto";
         container.style.padding = "0";
         container.style.position = "relative";
-        // For consistency, insert this container where you need it (adjust as needed)
         document.body.appendChild(container);
     } else {
         container.innerHTML = ""; // Clear existing content
@@ -287,7 +311,7 @@ function renderWeekdayChart(weekdayData) {
     const labels = averageWeekdayData.map(dp => dp.weekday);
     const dataValues = averageWeekdayData.map(dp => dp.average);
 
-    // Create the Chart.js line chart.
+    // Create the Chart.js line chart with your color scheme
     const ctx = canvas.getContext("2d");
     new Chart(ctx, {
         type: 'line',
@@ -296,13 +320,17 @@ function renderWeekdayChart(weekdayData) {
             datasets: [{
                 label: '', // No legend label
                 data: dataValues,
-                borderColor: "#36A2EB",
+                borderColor: "#a044ff", // --secondary-color
+                backgroundColor: "rgba(106, 48, 147, 0.1)", // --primary-color with 10% opacity
                 borderWidth: 3,
                 tension: 0.3,
                 pointRadius: 0, // Remove data points
                 borderCapStyle: 'round',
                 borderJoinStyle: 'round',
-                fill: false
+                fill: {
+                    target: 'origin',
+                    above: "rgba(106, 48, 147, 0.1)" // --primary-color with 10% opacity
+                }
             }]
         },
         options: {
@@ -313,6 +341,11 @@ function renderWeekdayChart(weekdayData) {
                     display: false // Hide legend
                 },
                 tooltip: {
+                    backgroundColor: '#6a3093', // --primary-color
+                    titleColor: '#fff',
+                    bodyColor: '#f3e5ff', // --accent-color
+                    borderColor: '#a044ff', // --secondary-color
+                    borderWidth: 1,
                     callbacks: {
                         label: function(context) {
                             return `${context.label}: ${context.parsed.y.toFixed(2)}`;
@@ -323,8 +356,12 @@ function renderWeekdayChart(weekdayData) {
             scales: {
                 x: {
                     display: true,
-                    grid: { display: false },
+                    grid: { 
+                        display: false,
+                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
+                    },
                     ticks: {
+                        color: '#6a3093', // --primary-color
                         autoSkip: false,
                         maxRotation: 0,
                         minRotation: 0,
@@ -341,7 +378,13 @@ function renderWeekdayChart(weekdayData) {
                 },
                 y: {
                     display: true,
-                    grid: { display: false },
+                    grid: { 
+                        display: false,
+                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
+                    },
+                    ticks: {
+                        color: '#6a3093' // --primary-color
+                    },
                     beginAtZero: true
                 }
             }
@@ -1144,7 +1187,7 @@ function getColorForSender(sender, index) {
     return defaultColors[index % defaultColors.length];
 }
   
-  function renderMonthlyChartChartJS(monthlyData) {
+function renderMonthlyChartChartJS(monthlyData) {
     // Compute overall total per month (sum of all sender values)
     const overallData = monthlyData.map(dp => {
         let sum = 0;
@@ -1184,7 +1227,7 @@ function getColorForSender(sender, index) {
     const labels = overallData.map(dp => dp.month);
     const dataValues = overallData.map(dp => dp.total);
 
-    // Create the Chart.js line chart
+    // Create the Chart.js line chart with your color scheme
     const ctx = canvas.getContext("2d");
     new Chart(ctx, {
         type: 'line',
@@ -1193,13 +1236,17 @@ function getColorForSender(sender, index) {
             datasets: [{
                 label: '', // No legend label
                 data: dataValues,
-                borderColor: "#36A2EB",
+                borderColor: "#a044ff", // --secondary-color
+                backgroundColor: "rgba(106, 48, 147, 0.1)", // --primary-color with 10% opacity
                 borderWidth: 3,
                 tension: 0.3,
                 pointRadius: 0, // Remove data points
                 borderCapStyle: 'round',
                 borderJoinStyle: 'round',
-                fill: false
+                fill: {
+                    target: 'origin',
+                    above: "rgba(106, 48, 147, 0.1)" // --primary-color with 10% opacity
+                }
             }]
         },
         options: {
@@ -1208,18 +1255,37 @@ function getColorForSender(sender, index) {
             plugins: {
                 legend: {
                     display: false // Hide legend
+                },
+                tooltip: {
+                    backgroundColor: '#6a3093', // --primary-color
+                    titleColor: '#fff',
+                    bodyColor: '#f3e5ff', // --accent-color
+                    borderColor: '#a044ff', // --secondary-color
+                    borderWidth: 1
                 }
             },
             scales: {
                 x: {
                     display: true,
                     title: { display: false },
-                    grid: { display: false }
+                    grid: { 
+                        display: false,
+                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
+                    },
+                    ticks: {
+                        color: '#6a3093' // --primary-color
+                    }
                 },
                 y: {
                     display: true,
                     title: { display: false },
-                    grid: { display: false },
+                    grid: { 
+                        display: false,
+                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
+                    },
+                    ticks: {
+                        color: '#6a3093' // --primary-color
+                    },
                     beginAtZero: true
                 }
             }

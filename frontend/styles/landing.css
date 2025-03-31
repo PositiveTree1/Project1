@@ -1,0 +1,399 @@
+:root {
+  --primary-color: #6a3093;
+  --logo-color: #3b005e;
+  --secondary-color: #a044ff;
+  --accent-color: #f3e5ff;
+  --text-color: #333;
+  --light-text: #fff;
+  --background: #fff;
+  --container-background: #f3e5ff;
+  --gradient: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  margin: 0;
+  padding: 0;
+  color: var(--text-color);
+  background-color: var(--background);
+}
+
+.container {
+  width: 90%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Navigation */
+.navbar {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  padding: 1rem 0;
+  background-color: rgba(255, 255, 255, 0); /* Semi-transparent white */
+  backdrop-filter: blur(10px); /* Blur effect */
+  -webkit-backdrop-filter: blur(8px); /* Safari support */
+  z-index: 1000;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 0.75rem 0;
+  }
+  .logo img {
+    height: 32px;
+  }
+}
+
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 1.5rem;
+  color: var(--logo-color);
+}
+
+.logo img {
+  height: 40px;
+}
+
+.navbar .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Hero Section */
+.hero {
+  padding: 8rem 0 4rem;
+  background: var(--accent-color);
+  position: relative;
+  overflow: hidden;
+  padding-top: 7rem;
+}
+
+.hero .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hero-content {
+  max-width: 600px;
+  flex: 1;
+  min-width: 300px;
+}
+
+.hero h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--primary-color);
+  line-height: 1.2;
+}
+
+.rotating-text {
+  height: 60px;
+  position: relative;
+  margin: 2rem 0;
+}
+
+.text-item {
+  position: absolute;
+  opacity: 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--secondary-color);
+  transition: opacity 0.5s ease-in-out;
+}
+
+.text-item.active {
+  opacity: 1;
+}
+
+.cta-button {
+  display: inline-block;
+  background: var(--gradient);
+  color: white;
+  padding: 12px 30px;
+  border-radius: 30px;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1.1rem;
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: 0 4px 15px rgba(106, 48, 147, 0.3);
+}
+
+.cta-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(106, 48, 147, 0.4);
+}
+
+.hero-bullets {
+  flex: 1;
+  max-width: 400px;
+  min-width: 300px;
+  margin-left: 2rem;
+}
+
+.bullet-point {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  background: white;
+  padding: 1rem;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+}
+
+.bullet-icon {
+  font-size: 1.8rem;
+  margin-right: 1rem;
+  color: var(--primary-color);
+}
+
+/* Features Section */
+.features {
+  padding: 5rem 0;
+  text-align: center;
+}
+
+.features h2 {
+  font-size: 2rem;
+  color: var(--primary-color);
+  margin-bottom: 3rem;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+}
+
+.feature-card {
+  background: var(--container-background);
+  padding: 2rem;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+  transition: transform 0.3s;
+}
+
+.feature-card:hover {
+  transform: translateY(-10px);
+}
+
+.feature-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.feature-card h3 {
+  color: var(--primary-color);
+  margin-bottom: 1rem;
+}
+
+/* Security Section */
+.security {
+  padding: 5rem 0;
+  background: var(--primary-color);
+  color: white;
+}
+
+.security .container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.security-content {
+  flex: 2;
+  min-width: 300px;
+}
+
+.security h2 {
+  font-size: 2rem;
+  margin-bottom: 2rem;
+}
+
+.security-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+}
+
+.security-feature {
+  background: rgba(255,255,255,0.1);
+  padding: 1.5rem;
+  border-radius: 10px;
+}
+
+.security-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.security-image {
+  flex: 1;
+  text-align: center;
+  min-width: 300px;
+}
+
+.shield-icon {
+  font-size: 10rem;
+  opacity: 0.2;
+}
+
+/* How It Works Section */
+.how-it-works {
+  padding: 5rem 0;
+  background: var(--accent-color);
+  text-align: center;
+}
+
+.how-it-works h2 {
+  font-size: 2rem;
+  color: var(--primary-color);
+  margin-bottom: 3rem;
+}
+
+.steps {
+  display: flex;
+  justify-content: center;
+  gap: 3rem;
+  flex-wrap: wrap;
+}
+
+.step {
+  max-width: 200px;
+}
+
+.step-number {
+  width: 50px;
+  height: 50px;
+  background: var(--gradient);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.5rem;
+  margin: 0 auto 1rem;
+}
+
+/* Footer */
+.footer {
+  padding: 2rem 0;
+  text-align: center;
+  background: var(--primary-color);
+  color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .hero .container {
+    flex-direction: column;
+  }
+  
+  .hero-content {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+  
+  .hero-bullets {
+    margin-left: 0;
+    margin-top: 2rem;
+  }
+  
+  .security .container {
+    flex-direction: column;
+  }
+  
+  .security-content {
+    margin-bottom: 2rem;
+  }
+  
+  .steps {
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero h1 {
+    font-size: 2rem;
+  }
+  
+  .text-item {
+    font-size: 1.2rem;
+  }
+  
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Add these to your existing styles.css */
+
+/* Fix for mobile layout shifting */
+@media (max-width: 768px) {
+  .hero .container {
+    display: block; /* Change from flex to block layout */
+    text-align: center; /* Center all content */
+  }
+
+  .hero-content {
+    margin: 0 auto; /* Center the content block */
+    padding: 0 20px; /* Add some padding */
+    max-width: 100%; /* Allow full width */
+  }
+
+  .hero-bullets {
+    margin: 2rem auto 0; /* Center and add top margin */
+    max-width: 100%; /* Allow full width */
+    padding: 0 20px; /* Match hero-content padding */
+  }
+
+  /* Fix for rotating text container */
+  .rotating-text {
+    height: 80px; /* Fixed height for all rotations */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1.5rem 0; /* Consistent vertical spacing */
+    position: relative;
+  }
+
+  .text-item {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    left: 0;
+    padding: 0 20px; /* Prevent edge touching */
+    box-sizing: border-box; /* Include padding in width */
+  }
+
+  /* Button spacing */
+  .cta-button {
+    margin-top: 1rem; /* Consistent spacing */
+    margin-bottom: 1rem;
+  }
+}
+
+/* Fix for text jump during rotation */
+/* .text-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  text-align: center;
+  transition: opacity 0.5s ease-in-out;
+  will-change: opacity; /* Optimize animation */
+ 
+
+/* Remove any existing transform/position properties from .text-item */

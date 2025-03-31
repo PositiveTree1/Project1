@@ -1,62 +1,70 @@
-import stopWords from './stopWords.js'; // Import the stop words list
-import swearWords from './words.js'; // Import the swear words list
+import stopWords from '../../words/stopWords.js'; // Import the stop words list
+import swearWords from '../../words/words.js'; // Import the swear words list
 
-import { preprocessChatForAI, analyzeWithAI } from './aiProcessor.js';
+import { preprocessChatForAI, analyzeWithAI } from '../../aiProcessor.js';
 
+let selectedFile = null;
 
-document.getElementById('processButton').addEventListener('click', () => {
+export function initFileProcessor() {
     const fileInput = document.getElementById('fileInput');
+    fileInput.addEventListener('change', function() {
+        if (this.files.length === 0) return;
+        selectedFile = this.files[0];
+        document.getElementById('fileName').textContent = selectedFile.name;
+    });
+}
+
+export function processSelectedFile() {
+    const fileInput = document.getElementById('fileInput');
+    // Try to get the file from the file input; if not available, use window.selectedFile
+    const file = fileInput.files[0] || window.selectedFile;
+    if (!file) {
+        throw new Error('Please select a file first');
+    }
     const region = document.getElementById('regionSelect').value;
-    const resultsDiv = document.getElementById('results');
+    const reader = new FileReader();
 
-    if (fileInput.files.length === 0) {
-        alert('Please select a file.');
-        return;
-    }
-
-    const file = fileInput.files[0];
-
-    // Check if the file is a ZIP file
-    if (file.name.endsWith('.zip')) {
-        const reader = new FileReader();
-
-        reader.onload = (event) => {
-            const arrayBuffer = event.target.result;
-
-            // Load the ZIP file using JSZip
-            JSZip.loadAsync(arrayBuffer).then((zip) => {
-                // Find the first .txt file in the ZIP archive
-                const txtFile = Object.keys(zip.files).find((filename) => filename.endsWith('.txt'));
-
-                if (!txtFile) {
-                    alert('No .txt file found in the ZIP archive.');
-                    return;
+    return new Promise((resolve, reject) => {
+        reader.onload = function(event) {
+            try {
+                let processingPromise;
+                if (file.name.endsWith('.zip')) {
+                    processingPromise = processZipFile(event.target.result);
+                } else {
+                    processingPromise = Promise.resolve(processChatLogFile(event.target.result, region));
                 }
-
-                // Extract and read the .txt file
-                zip.files[txtFile].async('text').then((text) => {
-                    processChatLogFile(text, region);
-                });
-            }).catch((error) => {
-                alert('Error reading the ZIP file: ' + error.message);
-            });
+                
+                processingPromise.then(() => {
+                    document.dispatchEvent(new Event('processingComplete'));
+                    resolve();
+                }).catch(reject);
+            } catch (error) {
+                reject(error);
+            }
         };
 
-        reader.readAsArrayBuffer(file);
-    } else if (file.name.endsWith('.txt')) {
-        // If the file is a plain .txt file, process it directly
-        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Failed to read file'));
 
-        reader.onload = (event) => {
-            const text = event.target.result;
-            processChatLogFile(text, region);
-        };
+        if (file.name.endsWith('.zip')) {
+            reader.readAsArrayBuffer(file);
+        } else {
+            reader.readAsText(file);
+        }
+    });
+}
 
-        reader.readAsText(file);
-    } else {
-        alert('Unsupported file type. Please upload a .txt or .zip file.');
-    }
-});
+
+function processZipFile(arrayBuffer) {
+    return JSZip.loadAsync(arrayBuffer).then((zip) => {
+        const txtFile = Object.keys(zip.files).find((filename) => filename.endsWith('.txt'));
+        if (!txtFile) {
+            throw new Error('No .txt file found in the ZIP archive');
+        }
+        return zip.files[txtFile].async('text');
+    }).then((text) => {
+        return processChatLogFile(text, document.getElementById('regionSelect').value);
+    });
+}
 
 function processChatLogFile(text, region) {
     // Initialize colors if not already initialized
@@ -180,6 +188,16 @@ function processChatLogFile(text, region) {
                     window.aiAnalysis.button.addEventListener('click', handleAIClick);
                 }
             }
+
+            document.dispatchEvent(new Event('processingComplete'));
+    
+            // Scroll to results if needed
+            const resultsSection = document.getElementById('results');
+            if (resultsSection) {
+                setTimeout(() => {
+                    resultsSection.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            }
               
               
               
@@ -233,9 +251,22 @@ function processChatLogFile(text, region) {
                 window.aiAnalysis.button.addEventListener('click', handleAIClick);
             }
         }
+
+        document.dispatchEvent(new Event('processingComplete'));
+        
+        // Scroll to results if needed
+        const resultsSection = document.getElementById('results');
+        if (resultsSection) {
+            setTimeout(() => {
+                resultsSection.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
           
     }
-}
+} 
+
+window.initFileProcessor = initFileProcessor;
+window.processSelectedFile = processSelectedFile;
 
 function processChatLog(text, region) {
     const lines = text.split('\n');

@@ -57,6 +57,10 @@ app.post('/api/analyze', async (req, res) => {
 app.get('*', (req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
+// Add this route to your existing server.js
+app.get('/analyze', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'analyze.html'));
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
