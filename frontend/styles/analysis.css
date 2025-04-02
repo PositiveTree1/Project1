@@ -3,11 +3,13 @@
 :root {
     --primary-color: #6a3093;
     --secondary-color: #a044ff;
-    --accent-color: #f3e5ff;
+    --accent-color: #9967c5;
     --text-color: #333;
     --light-text: #fff;
-    --background: #fff;
-    --container-background: #f3e5ff;
+    --background: #eed4ff;
+    --container-backgroundAccent: #f5f5f5;
+    --container-backgroundAccentPlus: #e9e9e9;
+    --container-background: #ffffff;
     --gradient: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
 }
 
@@ -15,7 +17,7 @@
     font-family: 'Poppins', sans-serif;
     margin: 0;
     padding: 0;
-    background: #f7ede3;
+    background: var(--background);
     color: #160020;
     text-align: center;
   }
@@ -374,6 +376,133 @@ html {
     gap: 5px;
 }
 
+/* Upload Guide Styles */
+.upload-guide {
+    margin-top: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 15px;
+    overflow: hidden;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .guide-toggle {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 500;
+    width: 100%;
+    text-align: left;
+    padding: 10px 0;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .guide-toggle::after {
+    content: '▼';
+    font-size: 0.8rem;
+    transition: transform 0.3s ease;
+  }
+  
+  .guide-toggle.active::after {
+    transform: rotate(180deg);
+  }
+  
+  .guide-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  
+  .guide-content.active {
+    max-height: 1000px;
+  }
+  
+  .guide-step {
+    display: flex;
+    gap: 15px;
+    margin: 20px 0;
+    align-items: flex-start;
+  }
+  
+  .step-number {
+    background: var(--secondary-color);
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-weight: bold;
+  }
+  
+  .step-content h3 {
+    color: white;
+    margin: 0 0 5px 0;
+    font-size: 1.1rem;
+  }
+  
+  .step-content p {
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0;
+    font-size: 0.95rem;
+  }
+  
+  .guide-note {
+    margin-top: 25px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+    text-align: center;
+  }
+  
+  /* Mobile optimization for upload area */
+@media (max-width: 768px) {
+    .upload-area {
+      display: none; /* Hide drop zone on mobile */
+    }
+    
+    .mobile-upload-button {
+      display: inline-block;
+      width: 100%;
+      max-width: 300px;
+      margin: 1rem auto;
+    }
+    
+    .desktop-upload-button {
+      display: none; /* Hide desktop button on mobile */
+    }
+    
+    /* Adjust other mobile styles */
+    .upload-content .subtitle {
+      margin-bottom: 1rem;
+    }
+    
+    .action-buttons {
+      margin-top: 15px;
+    }
+    
+    .format-selector {
+      margin-top: 1rem;
+    }
+    
+    .upload-guide {
+      margin-top: 20px;
+    }
+    
+    #fileInfo {
+      margin: 10px auto;
+    }
+}
 
 .top-section h1 {
     font-size: 40px; /* Smaller font size for mobile */
@@ -397,8 +526,10 @@ html {
 canvas {
     display: block;
     width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
 }
+
 
 .main-title {
     font-size: 4rem; /* Adjust as needed */
@@ -432,6 +563,25 @@ html {
     scroll-behavior: smooth;
 }
 
+/* Show mobile upload button only on mobile */
+.mobile-upload-button {
+    display: none;
+}
+
+.desktop-upload-button {
+    display: inline-block;
+}
+  
+.mobile-upload-button {
+    transition: none !important;
+    animation: none !important;
+}
+
+body.file-uploaded .mobile-upload-button {
+    display: none !important;
+}
+
+
 html, body {
     overflow-x: hidden; /* Prevent horizontal scrolling */
     touch-action: pan-y; /* Disable pinch-to-zoom */
@@ -444,7 +594,7 @@ html, body {
     z-index: 1; /* Ensure it stays below the top section */
     padding-top: 300px; /* Match the height of the top section */
     margin-top: -300px; /* Pull the content up to overlap the top section */
-    background: #f7ede3; /* Match the background color of the container */
+    background: var(--background); /* Match the background color of the container */
 }
 
 /* File Input & Buttons */
@@ -485,8 +635,95 @@ select {
 
 /* Ensure the timelineSection has no unnecessary margin or padding */
 #timelineSection {
-    margin: 0;
+    background: transparent;
+    box-shadow: none;
     padding: 0;
+    margin: 0 auto;
+    width: 100%;
+    overflow: hidden; /* Prevent any horizontal overflow */
+}
+
+.chart-card {
+    background: var(--container-background);
+    border-radius: 16px;
+    padding: 20px;
+    margin: 30px auto;
+    box-shadow: 0 8px 30px rgba(106, 48, 147, 0.15);
+    border: 4px solid var(--accent-color);
+    position: relative;
+    overflow: hidden;
+    width: 90%;
+    max-width: 1000px;
+}
+  
+  .chart-card-title {
+    font-size: 1.8rem;
+    color: var(--primary-color);
+    margin-bottom: 20px;
+    font-weight: 600;
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--accent-color);
+  }
+  
+
+
+.timeline-chart-container {
+    width: 100%;
+    max-width: 1800px; /* Match the card width */
+    overflow: hidden;
+    position: relative;
+    margin: 0 auto;
+    padding: 0;
+}
+
+@media screen and (max-width: 768px) {
+    .timeline-chart-card {
+        width: 95%;
+        padding: 15px;
+    }
+    
+    .timeline-chart-container {
+        width: 100%;
+        padding: 0;
+    }
+    
+    #columnChartCanvas {
+        height: 200px !important;
+    }
+}
+
+
+#columnChartCanvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+    margin: 0 auto;
+}
+
+
+@media screen and (min-width: 1200px) {
+    .timeline-chart-card {
+        max-width: 1400px;
+        width: 90%;
+    }
+    .chart-card {
+        max-width: 800px;
+    }
+    
+    .timeline-chart-container {
+        max-width: 100%; /* Changed from fixed px to 100% */
+    }
+}
+
+@media screen and (min-width: 1600px) {
+    .timeline-chart-card {
+        max-width: 1500px;
+        padding: 25px 30px;
+    }
+    #columnchartdiv {
+        height: 400px; /* Taller chart on very large screens */
+    }
 }
 #timelineSection .chart-container {
     margin: 0; /* Remove margin */
@@ -498,7 +735,7 @@ select {
     border-radius: 12px;
     padding: 20px;
     margin: 20px auto;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.199);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -578,36 +815,86 @@ select {
 #monthlychartdiv,
 #weekdaychartdiv,
 #hourlychartdiv {
-    width: 60vw; /* Default width for larger screens */
-    max-width: 1000px; /* Maximum width */
-    height: 350px; /* Default height */
-    margin-bottom: 60px; /* Spacing between charts */
+    width: 100% !important;
+    max-width: 100%;
+    height: 350px;
+    margin: 0;
+    padding: 0;
+    position: relative;
 }
 
-/* Timeline Chart Container (#columnchartdiv) */
+.timeline-chart-card {
+    background: var(--container-background);
+    border-radius: 25px;
+    padding: 20px 10px;
+    margin: 30px auto;
+    box-shadow: 0 8px 30px rgba(106, 48, 147, 0.15);
+    border: 4px solid var(--accent-color);
+    width: 98%;
+    max-width: 1800px; /* Large max-width for timeline only */
+    position: relative;
+}
+
+.chart-card {
+    background: var(--container-background);
+    border-radius: 25px;
+    padding: 20px 10px;
+    margin: 30px auto;
+    box-shadow: 0 8px 30px rgba(106, 48, 147, 0.15);
+    border: 4px solid var(--accent-color);
+    width: 98%;
+    max-width: 800px; /* Smaller max-width for other charts */
+    position: relative;
+}
+
+
 #columnchartdiv {
-    width: 90vw;              /* Use 60% of the viewport width on larger screens */
-    max-width: 1000px;        /* But no wider than 1000px */
-    height: 350px;            /* Consistent height as your other charts */
-    margin: 0 auto 60px auto; /* Center horizontally and add bottom margin */
+    width: 100% !important;
+    max-width: 100%;
+    height: 350px;
+    margin: 0;
+    padding: 0;
+    position: relative;
 }
 
-
-@media screen and (max-width: 768px) {
-    #columnchartdiv {
-        width: 100vw; /* Take up more width on smaller screens */
-        height: 250px;
-    }
-}
 
 
 @media (min-width: 1200px) {
     #columnchartdiv {
         max-width: 3000px;
     }
+    .chart-card {
+        width: 90%;
+        padding: 15px;
+    }
 } 
 
-
+@media (max-width: 768px) {
+    .chart-card, .timeline-chart-card {
+        width: 95%;
+        padding: 15px 5px;
+        margin: 20px auto;
+    }
+    
+    .chart-card-title {
+      font-size: 1.5rem;
+    }
+    
+    #columnchartdiv,
+    #monthlychartdiv,
+    #weekdaychartdiv,
+    #hourlychartdiv {
+        height: 250px;
+        padding: 0 5px;
+    }
+    #columnChartCanvas,
+    #monthlyChartCanvas,
+    #weekdayChartCanvas,
+    #hourlyChartCanvas {
+        margin: 0 -5px;
+        width: calc(100% + 10px) !important;
+    }
+}
 
 
 /* Legend Container */
@@ -624,7 +911,7 @@ select {
 #chatAnalyticsSection {
     position: relative;
     z-index: 3; /* Ensure it stays above the "Date & Times" section */
-    background: #f7ede3; /* Match the background color */
+    background: var(--background); /* Match the background color */
     padding-top: 50px; /* Add some spacing */
     padding-bottom: 50px; /* Add some spacing */
 }
@@ -635,18 +922,23 @@ select {
     flex-wrap: wrap;
     justify-content: center;
     gap: 20px; /* Spacing between boxes */
+    margin-top: 0;
     padding: 20px;
     max-width: 1200px; /* Maximum width for the container */
     margin: 0 auto; /* Center the container */
+    clear: both;
 }
 
 .person-box {
-    background: var(--background);
+    background: var(--container-background);
     border-radius: 12px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.199);
     padding: 30px;
     width: calc(50% - 20px);
     max-width: 500px;
+    flex: 1 1 300px; /* Flexible sizing with minimum width */
+    box-sizing: border-box;
+    border: 4px solid var(--accent-color);
     text-align: left;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     margin-bottom: 25px;
@@ -669,7 +961,7 @@ select {
 .person-box .percentage-bar {
     width: 100px;
     height: 8px;
-    background-color: #e0e0e0;
+    background-color: #ffffff;
     border-radius: 4px;
     position: relative;
     overflow: hidden;
@@ -695,15 +987,15 @@ select {
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Colored Line */
+/* Colored Line
 .color-line {
     position: absolute;
     top: 0;
     left: 0;
     bottom: 0;
-    width: 5px; /* Thin line */
-    background-color: #3e0057; /* Default color */
-}
+    width: 5px; 
+    background-color: #3e0057; 
+} */
 
 /* Responsive Adjustments */
 @media screen and (max-width: 1200px) {
@@ -744,7 +1036,7 @@ select {
     #monthlychartdiv,
     #weekdaychartdiv,
     #hourlychartdiv {
-        width: 95vw; /* Take up more width on smaller screens */
+        /* width: 95vw; Take up more width on smaller screens */
         height: 250px; /* Reduce height for smaller screens */
     }
 
@@ -920,11 +1212,12 @@ select {
 }
 
 .conversation-stats-container {
-    background: #fff;
-    border-radius: 12px;
+    background: var(--container-background);
+    border: 4px solid var(--accent-color);
+    border-radius: 20px;
     padding: 30px;
     margin: 20px auto;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    /* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); */
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     max-width: 90%; /* Ensure it doesn't stretch too wide on larger screens */
 }
@@ -958,7 +1251,7 @@ select {
     font-size: 16px;
     margin: 10px 0;
     padding: 10px;
-    background-color: #f9f9f9;
+    background-color: var(--container-backgroundAccent);
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -978,7 +1271,7 @@ select {
     color: #1c003b;
     margin-top: 20px;
     padding: 15px;
-    background-color: #f0f0f0;
+    background-color: var(--container-backgroundAccentPlus);
     border-radius: 8px;
     font-weight: 600;
     text-align: center;
@@ -1063,11 +1356,12 @@ select {
 .double-messages-container,
 
 .chat-focus-container {
-    background: #ffffff; /* Light background */
-    border-radius: 12px;
+    background: var(--container-background); /* Light background */
+    border-radius: 20px;
     padding: 20px;
     margin: 20px auto; /* Center the container */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 4px solid var(--accent-color);
     max-width: 600px; /* Wider for larger screens */
     width: 80%; /* Responsive width */
     text-align: center; /* Center content */
@@ -1086,21 +1380,26 @@ select {
 /* Radial Progress Chart (Double Messages) */
 .double-messages-radial {
     display: flex;
-    justify-content: center; /* Center the circles horizontally */
-    gap: 40px; /* Space between circles */
-    margin: 0 auto; /* Center the chart */
+    justify-content: space-around; /* Better spacing */
+    align-items: center;
+    margin: 20px auto;
+    padding: 10px;
+    width: 100%;
+    flex-wrap: nowrap; /* Prevent wrapping */
+    overflow-x: auto; /* Allow horizontal scrolling if needed */
 }
 
 .double-messages-radial .radial {
     position: relative;
-    width: 150px; /* Larger circles for bigger screens */
-    height: 150px;
+    width: 120px; /* Smaller base size */
+    height: 120px;
+    flex-shrink: 0; /* Prevent shrinking */
+    margin: 0 5px; /* Reduced gap */
 }
 
 .double-messages-radial .radial svg {
     width: 100%;
     height: 100%;
-    transform: rotate(-90deg); /* Start progress from the top */
 }
 
 .double-messages-radial .radial circle {
@@ -1110,7 +1409,7 @@ select {
 }
 
 .double-messages-radial .radial .background {
-    stroke: #e0e0e0; /* Light gray for the background circle */
+    stroke: var(--background); /* Light gray for the background circle */
 }
 
 .double-messages-radial .radial .progress {
@@ -1127,30 +1426,45 @@ select {
 }
 
 .double-messages-radial .radial .label .name {
-    font-size: 16px; /* Larger font size */
+    font-size: 14px; /* Larger font size */
     color: #3e0057;
     font-weight: 600;
 }
 
 .double-messages-radial .radial .label .count {
-    font-size: 20px; /* Larger font size for the count */
+    font-size: 18px; /* Larger font size for the count */
     color: #3e0057;
     font-weight: 600;
 }
 
+#doubleMessagesSection h2 {
+    font-size: 1.8rem;
+    color: #3e0057;
+    margin-bottom: 20px;
+    font-weight: 600;
+}
 
-
-
-
-
-
+.double-messages-container {
+    background: var(--container-background);
+    border-radius: 20px;
+    padding: 25px;
+    margin: 20px auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 4px solid var(--accent-color);
+    max-width: 600px;
+    width: 90%;
+    text-align: center;
+}
 
 /* Responsive Design */
 @media screen and (max-width: 768px) {
-    .double-messages-container,
     .chat-focus-container {
         padding: 15px;
         max-width: 80%; /* Slightly narrower for tablets */
+    }
+    .double-messages-container {
+        padding: 20px 15px;
+        width: 95%;
     }
 
     .double-messages-container h2,
@@ -1159,16 +1473,16 @@ select {
     }
 
     .double-messages-radial .radial {
-        width: 150px; /* Smaller circles on mobile */
-        height: 150px;
+        width: 100px; /* Even smaller on tiny screens */
+        height: 100px;
     }
 
     .double-messages-radial .radial .label .name {
-        font-size: 14px; /* Slightly smaller font size on mobile */
+        font-size: 13px; /* Slightly smaller font size on mobile */
     }
 
     .double-messages-radial .radial .label .count {
-        font-size: 18px; /* Slightly smaller font size on mobile */
+        font-size: 16px; /* Slightly smaller font size on mobile */
     }
 
 
@@ -1218,11 +1532,12 @@ select {
     display: flex;
     flex-wrap: wrap; /* Allow wrapping for multiple senders */
     justify-content: space-around;
+    border: 4px solid var(--accent-color);
     gap: 20px;
     margin: 20px auto;
     padding: 20px;
-    background: #fff;
-    border-radius: 12px;
+    background: var(--container-background);
+    border-radius: 25px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
@@ -1240,6 +1555,12 @@ select {
     font-weight: 600;
 }
 
+.content-analysis-header {
+    width: 100%;
+    margin-bottom: 30px; /* Consistent spacing */
+    clear: both; /* Prevent floating elements from interfering */
+}
+
 /* Rankings Container */
 .rankings-container {
     display: flex;
@@ -1253,7 +1574,7 @@ select {
     align-items: center;
     justify-content: space-between;
     padding: 10px;
-    background-color: #f9f9f9;
+    background-color: var(--container-backgroundAccent);
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -1322,7 +1643,7 @@ select {
 }
 
 .conversation-stats-container {
-    background: #fff;
+    background: var(--container-background);
     border-radius: 12px;
     padding: 20px;
     margin: 40px auto; /* Center horizontally with consistent margins */

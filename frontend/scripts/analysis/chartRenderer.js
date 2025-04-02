@@ -1,9 +1,33 @@
-
 function renderStackedColumnChart(columnChartData, callback) {
     // Retrieve original data and sender list
     const originalData = columnChartData.data;
     const senders = columnChartData.senders;
     
+    // Get the timeline section container
+    const timelineSection = document.getElementById("timelineSection");
+    if (!timelineSection) {
+        console.error("Error: timelineSection not found in the HTML.");
+        return;
+    }
+    timelineSection.innerHTML = ""; // Clear any existing content
+    
+    // Create container for Timeline chart
+    const timelineCard = document.createElement('div');
+    timelineCard.className = 'chart-card timeline-chart-card'; // Added special class
+    timelineSection.appendChild(timelineCard);
+    
+    // Add title above the container
+    const timelineTitle = document.createElement('h2');
+    timelineTitle.className = 'chart-card-title';
+    timelineTitle.textContent = 'Timeline';
+    timelineCard.appendChild(timelineTitle);
+    
+    // Create chart container div with special class for wider desktop view
+    const columnChartDiv = document.createElement('div');
+    columnChartDiv.id = 'columnchartdiv';
+    columnChartDiv.className = 'timeline-chart-container'; // Added special class
+    timelineCard.appendChild(columnChartDiv);
+
     // Limit data points to approximately 130 by averaging chunks if necessary
     const maxDataPoints = 130;
     let limitedData = originalData;
@@ -32,27 +56,18 @@ function renderStackedColumnChart(columnChartData, callback) {
         }
     }
     
-    // Get the container div from index.html (id="columnchartdiv")
-    let container = document.getElementById("columnchartdiv");
-    if (!container) {
-        console.error("Error: columnchartdiv not found in the HTML.");
-        return;
-    }
-    container.innerHTML = ""; // Clear any existing content
+    // Clear any existing content (already done above)
+    columnChartDiv.innerHTML = "";
     
-    // Add the chart title above the canvas
-    const title = document.createElement("h2");
-    title.className = "title subtitle";
-    title.textContent = "Timeline";
-    title.style.marginBottom = "10px";
-    container.appendChild(title);
-    
-    // Create and configure the canvas element
+    // Create and configure the canvas element with proper responsive settings
     const canvas = document.createElement("canvas");
     canvas.id = "columnChartCanvas";
     canvas.style.width = "100%";
+    canvas.style.maxWidth = "100%"; // Add this line
+    canvas.style.display = "block";
     canvas.style.height = window.innerWidth < 768 ? "200px" : "300px";
-    container.appendChild(canvas);
+    columnChartDiv.appendChild(canvas);
+    
     
     // Prepare labels from the limited data using the dateLabel field
     const labels = limitedData.map(dp => dp.dateLabel);
@@ -73,8 +88,8 @@ function renderStackedColumnChart(columnChartData, callback) {
     const dataset = {
         label: "Average Messages",
         data: averageData,
-        borderColor: "#a044ff", // var(--secondary-color)
-        backgroundColor: "rgba(106, 48, 147, 0.1)", // var(--primary-color) with opacity
+        borderColor: "#a044ff",
+        backgroundColor: "rgba(106, 48, 147, 0.1)",
         borderWidth: 3,
         tension: 0.3,
         pointRadius: 0,
@@ -82,7 +97,7 @@ function renderStackedColumnChart(columnChartData, callback) {
         borderJoinStyle: 'round',
         fill: {
             target: 'origin',
-            above: 'rgba(106, 48, 147, 0.1)' // var(--primary-color) with opacity
+            above: 'rgba(106, 48, 147, 0.1)'
         }
     };
 
@@ -97,6 +112,14 @@ function renderStackedColumnChart(columnChartData, callback) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    left: 0,    // Remove default padding
+                    right: 0,   // Remove default padding
+                    top: 10,
+                    bottom: 10
+                }
+            },
             plugins: {
                 legend: {
                     display: false
@@ -110,7 +133,7 @@ function renderStackedColumnChart(columnChartData, callback) {
                         autoSkip: false,
                         maxRotation: 0,
                         minRotation: 0,
-                        padding: 10,
+                        padding: 5,
                         callback: function(value, index, ticks) {
                             if (index === 0 || index === ticks.length - 1) return labels[index];
                             const interval = Math.ceil(ticks.length / 5);
@@ -134,44 +157,8 @@ function renderStackedColumnChart(columnChartData, callback) {
 
 
 function renderHourlyChart(hourlyData) {
-    // Use the container defined in your HTML with id "hourlychartdiv"
-    let container = document.getElementById("hourlychartdiv");
-    if (!container) {
-        // If it doesn't exist, create it and insert it after the weekday chart
-        container = document.createElement("div");
-        container.id = "hourlychartdiv";
-        container.style.width = "90%";
-        container.style.maxWidth = "1000px";
-        container.style.margin = "20px auto";
-        container.style.padding = "0";
-        container.style.position = "relative";
-
-        const weekdayChartDiv = document.getElementById("weekdaychartdiv");
-        if (weekdayChartDiv) {
-            weekdayChartDiv.insertAdjacentElement("afterend", container);
-        } else {
-            document.body.appendChild(container);
-        }
-    } else {
-        container.innerHTML = ""; // Clear existing content
-    }
-
-    // Add the chart title
-    const title = document.createElement("h2");
-    title.className = "title subtitle";
-    title.textContent = "Per Hour...";
-    container.appendChild(title);
-
-    // Create and configure the canvas element
-    const canvas = document.createElement("canvas");
-    canvas.id = "hourlyChartCanvas";
-    canvas.style.width = "100%";
-    canvas.style.height = window.innerWidth < 768 ? "200px" : "300px";
-    container.appendChild(canvas);
-
-    // Prepare labels (time labels) and compute the average messages per hour
-    const labels = hourlyData.map(dp => dp.hour);
-    const averageData = hourlyData.map(dp => {
+    // Compute average messages per hour across all senders.
+    const averageHourlyData = hourlyData.map(dp => {
         let sum = 0, count = 0;
         for (let key in dp) {
             if (key !== "hour") {
@@ -179,53 +166,79 @@ function renderHourlyChart(hourlyData) {
                 count++;
             }
         }
-        return count ? (sum / count) : 0;
+        return { hour: dp.hour, average: count ? sum / count : 0 };
     });
 
-    // Create a single dataset for the average values
-    const dataset = {
-        label: "Average Messages",
-        data: averageData,
-        borderColor: "#a044ff", // --secondary-color
-        backgroundColor: "rgba(106, 48, 147, 0.1)", // --primary-color with 10% opacity
-        borderWidth: 3,
-        tension: 0.3,
-        pointRadius: 0,
-        borderCapStyle: 'round',
-        borderJoinStyle: 'round',
-        fill: {
-            target: 'origin',
-            above: "rgba(106, 48, 147, 0.1)" // --primary-color with 10% opacity
-        }
-    };
+    // Get the timeline section
+    const timelineSection = document.getElementById("timelineSection");
 
-    // Create the chart with custom tick settings on the x-axis
+    // Create a container for the Hourly chart
+    const hourlyCard = document.createElement('div');
+    hourlyCard.className = 'chart-card';
+    timelineSection.appendChild(hourlyCard);
+
+    // Add title
+    const hourlyTitle = document.createElement('h2');
+    hourlyTitle.className = 'chart-card-title';
+    hourlyTitle.textContent = 'Hourly Activity';
+    hourlyCard.appendChild(hourlyTitle);
+
+    // Create chart container
+    const hourlyChartDiv = document.createElement('div');
+    hourlyChartDiv.id = 'hourlychartdiv';
+    hourlyCard.appendChild(hourlyChartDiv);
+
+    // Create canvas for Chart.js
+    const canvas = document.createElement("canvas");
+    hourlyChartDiv.appendChild(canvas);
+
+    // Prepare labels (time labels) and data arrays.
+    const labels = averageHourlyData.map(dp => dp.hour);
+    const dataValues = averageHourlyData.map(dp => dp.average);
+
+    // Create the Chart.js line chart
     const ctx = canvas.getContext("2d");
     new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
-            datasets: [dataset]
+            datasets: [{
+                label: '', // No legend label
+                data: dataValues,
+                borderColor: "#a044ff", // --secondary-color
+                backgroundColor: "rgba(106, 48, 147, 0.1)", // --primary-color with 10% opacity
+                borderWidth: 3,
+                tension: 0.3,
+                pointRadius: 0, // Remove data points
+                borderCapStyle: 'round',
+                borderJoinStyle: 'round',
+                fill: {
+                    target: 'origin',
+                    above: "rgba(106, 48, 147, 0.1)" // --primary-color with 10% opacity
+                }
+            }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false }, // Hide legend
                 tooltip: {
                     backgroundColor: '#6a3093', // --primary-color
                     titleColor: '#fff',
                     bodyColor: '#f3e5ff', // --accent-color
                     borderColor: '#a044ff', // --secondary-color
-                    borderWidth: 1
+                    borderWidth: 1,
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.label}: ${context.parsed.y.toFixed(2)}`;
+                        }
+                    }
                 }
             },
             scales: {
                 x: {
                     display: true,
-                    title: { display: false },
                     grid: { 
                         display: false,
                         color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
@@ -237,18 +250,14 @@ function renderHourlyChart(hourlyData) {
                         minRotation: 0,
                         padding: 10,
                         callback: function(value, index, ticks) {
-                            // Always show the first and last labels
                             if (index === 0 || index === ticks.length - 1) return labels[index];
-                            // Otherwise, determine an interval to show a few labels in between
                             const interval = Math.ceil(ticks.length / 5);
-                            if (index % interval === 0) return labels[index];
-                            return "";
+                            return (index % interval === 0) ? labels[index] : "";
                         }
                     }
                 },
                 y: {
                     display: true,
-                    title: { display: false },
                     grid: { 
                         display: false,
                         color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
@@ -256,7 +265,7 @@ function renderHourlyChart(hourlyData) {
                     ticks: {
                         color: '#6a3093' // --primary-color
                     },
-                    min: 0
+                    beginAtZero: true
                 }
             }
         }
@@ -269,44 +278,34 @@ function renderHourlyChart(hourlyData) {
 function renderWeekdayChart(weekdayData) {
     // Compute average messages per weekday across all senders.
     const averageWeekdayData = weekdayData.map(dp => {
-        let sum = 0, count = 0;
-        for (let key in dp) {
-            if (key !== "weekday") {
-                sum += dp[key];
-                count++;
-            }
-        }
+        const senderValues = Object.keys(dp).filter(key => key !== "weekday").map(key => dp[key]);
+        const sum = senderValues.reduce((acc, val) => acc + val, 0);
+        const count = senderValues.length;
         return { weekday: dp.weekday, average: count ? sum / count : 0 };
     });
 
-    // Get or create a container for the weekday chart.
-    let container = document.getElementById("weekdaychartdiv");
-    if (!container) {
-        container = document.createElement("div");
-        container.id = "weekdaychartdiv";
-        container.style.width = "90%";
-        container.style.maxWidth = "1000px";
-        container.style.margin = "20px auto";
-        container.style.padding = "0";
-        container.style.position = "relative";
-        document.body.appendChild(container);
-    } else {
-        container.innerHTML = ""; // Clear existing content
-    }
+    const timelineSection = document.getElementById("timelineSection");
+    
+    // Create container for Weekday chart
+    const weekdayCard = document.createElement('div');
+    weekdayCard.className = 'chart-card';
+    timelineSection.appendChild(weekdayCard);
+    
+    // Add title
+    const weekdayTitle = document.createElement('h2');
+    weekdayTitle.className = 'chart-card-title';
+    weekdayTitle.textContent = 'Weekday Activity';
+    weekdayCard.appendChild(weekdayTitle);
+    
+    // Create chart container
+    const weekdayChartDiv = document.createElement('div');
+    weekdayChartDiv.id = 'weekdaychartdiv';
+    weekdayCard.appendChild(weekdayChartDiv);
 
-    // Add the chart title above the canvas.
-    const title = document.createElement("h2");
-    title.className = "title subtitle";
-    title.textContent = "Per Day...";
-    container.appendChild(title);
-
-    // Create and configure the canvas element.
+    // Create and append canvas
     const canvas = document.createElement("canvas");
-    canvas.id = "weekdayChartCanvas";
-    canvas.style.width = "100%";
-    canvas.style.height = window.innerWidth < 768 ? "200px" : "300px";
-    container.appendChild(canvas);
-
+    weekdayChartDiv.appendChild(canvas);
+    
     // Prepare the labels and data arrays.
     const labels = averageWeekdayData.map(dp => dp.weekday);
     const dataValues = averageWeekdayData.map(dp => dp.average);
@@ -397,6 +396,29 @@ function renderPersonBoxes(stats, uniqueWords, topEmojis, longestMessage, colors
     const personBoxesContainer = document.getElementById("personBoxesContainer");
     personBoxesContainer.innerHTML = ""; // Clear any existing boxes
 
+    // Add "Content Analysis" title with proper spacing container
+    const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
+    if (chatAnalyticsSection) {
+        // Remove any existing title container to avoid duplicates
+        const existingTitleContainer = chatAnalyticsSection.querySelector(".content-analysis-header");
+        if (existingTitleContainer) existingTitleContainer.remove();
+        
+        // Create a container div for the title with proper spacing
+        const titleContainer = document.createElement("div");
+        titleContainer.className = "content-analysis-header";
+        
+        // Create the title element
+        const contentAnalysisTitle = document.createElement("h1");
+        contentAnalysisTitle.className = "title main-title";
+        contentAnalysisTitle.textContent = "Content Analysis";
+        
+        // Add the title to the container
+        titleContainer.appendChild(contentAnalysisTitle);
+        
+        // Insert the container before the person boxes
+        personBoxesContainer.parentNode.insertBefore(titleContainer, personBoxesContainer);
+    }
+
     // Calculate the total number of messages
     const totalMessages = Object.values(stats).reduce((sum, count) => sum + count, 0);
 
@@ -404,12 +426,6 @@ function renderPersonBoxes(stats, uniqueWords, topEmojis, longestMessage, colors
     Object.entries(stats).forEach(([sender, count]) => {
         const box = document.createElement("div");
         box.classList.add("person-box");
-
-        // Add a colored line to the side of the box
-        const colorLine = document.createElement("div");
-        colorLine.classList.add("color-line");
-        colorLine.style.backgroundColor = colors[sender] || "#3e0057"; // Default color if not found
-        box.appendChild(colorLine);
 
         // Add the person's name
         const name = document.createElement("h2");
@@ -764,27 +780,34 @@ function updateSelectedPeople() {
 function renderDoubleMessages(doubleMessageCounts) {
     const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
 
-    // Remove any existing Double Messages section
+    // Remove any existing section
     let doubleMessagesSection = document.getElementById("doubleMessagesSection");
     if (doubleMessagesSection) {
         doubleMessagesSection.remove();
     }
 
-    // Create a new container for the Double Messages section
+    // Create new container
     doubleMessagesSection = document.createElement("div");
     doubleMessagesSection.id = "doubleMessagesSection";
     chatAnalyticsSection.appendChild(doubleMessagesSection);
 
-    // Add the title (styled as a subtitle)
+    // Create the white container box
+    const container = document.createElement("div");
+    container.className = "double-messages-container";
+    doubleMessagesSection.appendChild(container);
+
+    // Add title INSIDE the container
     const title = document.createElement("h2");
     title.className = "title subtitle";
     title.textContent = "Double Messages";
-    doubleMessagesSection.appendChild(title);
+    container.appendChild(title);
 
-    // Create the radial chart container
+    // Create radial container
     const radialContainer = document.createElement("div");
     radialContainer.className = "double-messages-radial";
-    doubleMessagesSection.appendChild(radialContainer);
+    container.appendChild(radialContainer);
+
+    
 
     // Find the maximum count for scaling the progress
     const maxCount = Math.max(...Object.values(doubleMessageCounts));
@@ -1190,44 +1213,39 @@ function getColorForSender(sender, index) {
 function renderMonthlyChartChartJS(monthlyData) {
     // Compute overall total per month (sum of all sender values)
     const overallData = monthlyData.map(dp => {
-        let sum = 0;
-        Object.keys(dp).forEach(key => {
-            if (key !== "month") {
-                sum += dp[key];
-            }
-        });
+        let sum = Object.keys(dp)
+            .filter(key => key !== "month")
+            .reduce((acc, key) => acc + dp[key], 0);
         return { month: dp.month, total: sum };
     });
 
-    // Get the existing container div from index.html
-    let container = document.getElementById("monthlychartdiv");
-    if (!container) {
-        console.error("Error: monthlychartdiv not found in the HTML.");
-        return;
-    }
+    const timelineSection = document.getElementById("timelineSection");
+    
+    // Create container for Monthly chart
+    const monthlyCard = document.createElement('div');
+    monthlyCard.className = 'chart-card';
+    timelineSection.appendChild(monthlyCard);
+    
+    // Add title
+    const monthlyTitle = document.createElement('h2');
+    monthlyTitle.className = 'chart-card-title';
+    monthlyTitle.textContent = 'Monthly Activity';
+    monthlyCard.appendChild(monthlyTitle);
+    
+    // Create chart container
+    const monthlyChartDiv = document.createElement('div');
+    monthlyChartDiv.id = 'monthlychartdiv';
+    monthlyCard.appendChild(monthlyChartDiv);
 
-    // Clear previous content inside the container
-    container.innerHTML = "";
-
-    // Add the chart title
-    const title = document.createElement("h2");
-    title.className = "title subtitle";
-    title.textContent = "Per Month...";
-    title.style.marginBottom = "10px";
-    container.appendChild(title);
-
-    // Create and configure the canvas element
-    const canvas = document.createElement("canvas");
-    canvas.id = "monthlyChartCanvas";
-    canvas.style.width = "100%";
-    canvas.style.height = window.innerWidth < 768 ? "200px" : "300px";
-    container.appendChild(canvas);
+    // Create and append canvas for Chart.js
+    const canvas = document.createElement('canvas');
+    monthlyChartDiv.appendChild(canvas);
 
     // Prepare chart data using overallData
     const labels = overallData.map(dp => dp.month);
     const dataValues = overallData.map(dp => dp.total);
 
-    // Create the Chart.js line chart with your color scheme
+    // Create the Chart.js line chart
     const ctx = canvas.getContext("2d");
     new Chart(ctx, {
         type: 'line',
@@ -1292,6 +1310,7 @@ function renderMonthlyChartChartJS(monthlyData) {
         }
     });
 }
+
 
 function renderCallStats() {
     const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");

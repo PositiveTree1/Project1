@@ -298,7 +298,7 @@ function processChatLog(text, region) {
     monthNames.forEach(month => perMonthCounts[month] = {});
 
     // Weekday stats (per sender)
-    const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const perWeekdayCounts = {};
     weekdayNames.forEach(day => perWeekdayCounts[day] = {});
 

@@ -1,8 +1,32 @@
 (function() {
     let selectedFile = null;
+    let isFileUploaded = false;
+    let dropZone, mobileUploadButton, desktopUploadButton;
+
+    function initializeElements() {
+        dropZone = document.getElementById('dropZone');
+        mobileUploadButton = document.querySelector('.mobile-upload-button');
+        desktopUploadButton = document.querySelector('.desktop-upload-button');
+        
+        // Set initial visibility based on screen size
+        updateUploadInterface();
+    }
+
+    function updateUploadInterface() {
+        if (!isFileUploaded) {
+            if (window.innerWidth <= 768) {
+                if (dropZone) dropZone.style.display = 'none';
+                if (mobileUploadButton) mobileUploadButton.style.display = 'inline-block';
+                if (desktopUploadButton) desktopUploadButton.style.display = 'none';
+            } else {
+                if (dropZone) dropZone.style.display = 'flex';
+                if (mobileUploadButton) mobileUploadButton.style.display = 'none';
+                if (desktopUploadButton) desktopUploadButton.style.display = 'inline-block';
+            }
+        }
+    }
 
     function setupDragDrop() {
-        const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const fileInfo = document.getElementById('fileInfo');
         const fileName = document.getElementById('fileName');
@@ -22,26 +46,24 @@
         
         if (!dropZone || !fileInput) return;
         
-        // Process button click handler – now calls processSelectedFile from fileProcessor.js
-        processButton.addEventListener('click', async function() {
+        // Process button click handler
+        processButton.addEventListener('click', async function(e) {
+            e.stopPropagation();
             if (!fileInput.files.length) {
                 alert('Please select a file first');
                 return;
             }
             
-            // Show loading state
             processButton.classList.add('processing');
             loadingOverlay.classList.add('active');
             processButton.disabled = true;
             
-            // Scroll to results section
             const resultsSection = document.getElementById('results');
             if (resultsSection) {
                 resultsSection.scrollIntoView({ behavior: 'smooth' });
             }
             
             try {
-                // Call the exported function from fileProcessor.js
                 await window.processSelectedFile();
             } catch (error) {
                 console.error('Error processing file:', error);
@@ -53,7 +75,7 @@
             }
         });
 
-        // File reader helper and drag/drop handlers for UI feedback
+        // Drag/drop handlers
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dropZone.addEventListener(eventName, preventDefaults, false);
         });
@@ -83,10 +105,7 @@
         
         function handleDrop(e) {
             const dt = e.dataTransfer;
-            const files = dt.files;
-            if (files.length) {
-                handleFiles(files);
-            }
+            handleFiles(dt.files);
         }
         
         fileInput.addEventListener('change', function() {
@@ -96,30 +115,84 @@
         });
         
         // Clear file selection
-        clearFile.addEventListener('click', function() {
+        clearFile.addEventListener('click', function(e) {
+            e.stopPropagation();
             fileInput.value = '';
             selectedFile = null;
             fileInfo.style.display = 'none';
-            uploadText.textContent = 'Drag & drop your .txt or .zip file here';
             processButton.disabled = true;
-            dropZone.style.display = 'flex';
+            isFileUploaded = false;
+            updateUploadInterface();
+            uploadText.textContent = 'Drag & drop your .txt or .zip file here';
         });
         
-        function handleFiles(files) {
-            // Save the file globally so fileProcessor.js can access it.
-            window.selectedFile = files[0];
-            fileName.textContent = files[0].name;
-            fileInfo.style.display = 'flex';
-            uploadText.textContent = 'File selected! Drop another to replace';
-            processButton.disabled = false;
-            dropZone.style.display = 'none';
-            
-            if (document.querySelector('.signin-button')?.textContent.includes('Signed in')) {
-                processButton.textContent = 'Analyze Chat';
-            }
+        // Single click handler for upload buttons
+        if (mobileUploadButton) {
+            mobileUploadButton.addEventListener('click', function(e) {
+                e.stopPropagation();
+                fileInput.click();
+            }, false);
         }
         
+        if (desktopUploadButton) {
+            desktopUploadButton.addEventListener('click', function(e) {
+                e.stopPropagation();
+                fileInput.click();
+            }, false);
+        }
     }
-    
-    document.addEventListener('DOMContentLoaded', setupDragDrop);
-})();
+
+    function handleFiles(files) {
+        if (!files.length) return;
+        
+        window.selectedFile = files[0];
+        const fileName = document.getElementById('fileName');
+        const uploadText = document.getElementById('upload-text');
+        const processButton = document.getElementById('processButton');
+        const fileInfo = document.getElementById('fileInfo');
+        
+        fileName.textContent = files[0].name;
+        fileInfo.style.display = 'flex';
+        uploadText.textContent = 'File selected! Drop another to replace';
+        processButton.disabled = false;
+        isFileUploaded = true;
+        
+        // Hide upload interfaces
+        if (dropZone) dropZone.style.display = 'none';
+        if (mobileUploadButton) mobileUploadButton.style.display = 'none';
+        if (desktopUploadButton) desktopUploadButton.style.display = 'none';
+        
+        if (document.querySelector('.signin-button')?.textContent.includes('Signed in')) {
+            processButton.textContent = 'Analyze Chat';
+        }
+    }
+
+    function setupGuideToggle() {
+        const toggle = document.querySelector('.guide-toggle');
+        const content = document.querySelector('.guide-content');
+        
+        if (toggle && content) {
+            toggle.addEventListener('click', function(e) {
+                e.stopPropagation();
+                toggle.classList.toggle('active');
+                content.classList.toggle('active');
+            });
+            
+            if (window.innerWidth <= 768) {
+                toggle.classList.add('active');
+                content.classList.add('active');
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeElements();
+        setupDragDrop();
+        setupGuideToggle();
+        updateUploadInterface(); // Ensure proper initial state
+    });
+
+    window.addEventListener('resize', function() {
+        updateUploadInterface();
+    });
+})(); 
