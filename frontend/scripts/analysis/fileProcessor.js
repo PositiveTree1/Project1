@@ -1330,16 +1330,10 @@ function calculateEngagementRatio(conversations) {
 // Add this function to fileProcessor.js
 function calculateStreakStats(text, region) {
     const lines = text.split('\n');
+    // Regex for format: "[12/04/2023, 17:09:50] Camille: Message"
     const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\] ([^:]+):/;
     
-    let currentStreak = 0;
-    let maxStreak = 0;
-    let currentDate = null;
-    let streakStartDate = null;
-    let maxStreakStartDate = null;
-    let maxStreakEndDate = null;
-    
-    // Track messages per day
+    // Track daily messages and which senders contributed each day.
     const dailyMessages = {};
     
     lines.forEach(line => {
@@ -1348,45 +1342,73 @@ function calculateStreakStats(text, region) {
             const day = region === "US" ? match[2] : match[1];
             const month = region === "US" ? match[1] : match[2];
             const year = match[3];
-            const dateKey = `${year}-${month}-${day}`;
+            const dateKey = `${year}-${month}-${day}`; // Format: YYYY-MM-DD
             
-            // Initialize or increment message count for this date
-            dailyMessages[dateKey] = (dailyMessages[dateKey] || 0) + 1;
+            const sender = match[7].trim();
+            
+            if (!dailyMessages[dateKey]) {
+                dailyMessages[dateKey] = { count: 0, senders: new Set() };
+            }
+            dailyMessages[dateKey].count++;
+            dailyMessages[dateKey].senders.add(sender);
         }
     });
     
-    // Sort dates chronologically
+    // Get sorted dates in ascending order.
     const sortedDates = Object.keys(dailyMessages).sort();
     
-    // Calculate streaks
-    for (let i = 0; i < sortedDates.length; i++) {
-        const date = sortedDates[i];
-        const messageCount = dailyMessages[date];
+    // Filter valid dates: at least 7 messages and at least 2 different senders.
+    const validDates = sortedDates.filter(date => {
+        const info = dailyMessages[date];
+        return info.count >= 3 && info.senders.size >= 2;
+    });
+    
+    // Calculate consecutive streaks from validDates.
+    let currentStreak = 0;
+    let maxStreak = 0;
+    let streakStartDate = null;
+    let maxStreakStartDate = null;
+    let maxStreakEndDate = null;
+    
+    for (let i = 0; i < validDates.length; i++) {
+        const date = validDates[i];
+        const currentDateObj = new Date(date);
         
-        // Only count days with at least 10 messages as part of a streak
-        if (messageCount >= 10) {
-            if (currentStreak === 0) {
+        if (i === 0) {
+            // First valid day starts a new streak.
+            currentStreak = 1;
+            streakStartDate = date;
+        } else {
+            const prevDate = validDates[i - 1];
+            const prevDateObj = new Date(prevDate);
+            // Calculate the difference in days between the current and previous valid day.
+            const diffDays = (currentDateObj - prevDateObj) / (1000 * 60 * 60 * 24);
+            
+            if (diffDays === 1) {
+                // Day is consecutive, continue the streak.
+                currentStreak++;
+            } else {
+                // Non-consecutive day: reset streak.
+                currentStreak = 1;
                 streakStartDate = date;
             }
-            
-            currentStreak++;
-            
-            // Check if this is a new max streak
-            if (currentStreak > maxStreak) {
-                maxStreak = currentStreak;
-                maxStreakStartDate = streakStartDate;
-                maxStreakEndDate = date;
-            }
-        } else {
-            currentStreak = 0;
-            streakStartDate = null;
+        }
+        
+        // Update max streak if the current streak is longer.
+        if (currentStreak > maxStreak) {
+            maxStreak = currentStreak;
+            maxStreakStartDate = streakStartDate;
+            maxStreakEndDate = date;
         }
     }
     
+    // Calculate the elapsed duration between the first and last day of the max streak.
+    // For instance, a streak spanning from the 1st to the 15th has an elapsed duration of 14 days.
+    maxStreak = maxStreak - 1;    
     return {
-        maxStreak,
-        maxStreakStartDate,
-        maxStreakEndDate
+        maxStreak,             // Inclusive count of valid consecutive days.
+        maxStreakStartDate,    // Start date of the max streak.
+        maxStreakEndDate       // End date of the max streak.
     };
 }
 
@@ -1476,92 +1498,156 @@ function displayAIResults(data, originalNames) {
             <p>${data.evolution?.description || 'No evolution analysis available'}</p>
         </div>
     `;
+    
     // Insert overall analysis above the button.
     if (aiButton && aiButton.parentNode) {
       aiButton.parentNode.insertBefore(overallContainer, aiButton);
     } else {
       aiSection.appendChild(overallContainer);
     }
-  
-    // Create and insert Participant Analysis containers.
+
+    // Improved participant matching logic
+    let participantA = null;
+    let participantB = null;
+    
     if (data.participants?.length === 2) {
-      data.participants.forEach((participant, index) => {
-        const participantContainer = document.createElement("div");
-        participantContainer.className = "ai-results-container analysis-result";
-        const name = index === 0 ? originalNames.personA : originalNames.personB;
-        participantContainer.innerHTML = `
-            <div class="participant-analysis">
-                <h3>${name}'s Analysis</h3>
-                <div class="interest-level">Interest: ${participant.interestLevel}/10</div>
-                
-                <div class="communication-style">
-                    <h4>Communication Style</h4>
-                    <p>${participant.communicationStyle?.generalTraits || 'N/A'}</p>
-                    <p>${participant.communicationStyle?.trustAndEmotionalDepth || 'N/A'}</p>
-                </div>
-                
-                <div class="flags-section">
-                    <div class="green-flags">
-                        <h4>Green Flags</h4>
-                        ${participant.greenFlags?.map(flag => `
-                            <div class="flag-item green-flag">
-                                <strong>${flag.title || 'Positive'}:</strong> ${flag.description || 'N/A'}
-                            </div>
-                        `).join('') || '<p>No green flags identified</p>'}
+        // Try to match participants by name similarity
+        const [p1, p2] = data.participants;
+        
+        // Calculate similarity scores for both possible orders
+        const score1A = stringSimilarity(p1.name, originalNames.personA);
+        const score1B = stringSimilarity(p1.name, originalNames.personB);
+        const score2A = stringSimilarity(p2.name, originalNames.personA);
+        const score2B = stringSimilarity(p2.name, originalNames.personB);
+        
+        // Determine which ordering has the best overall match
+        if (score1A + score2B > score1B + score2A) {
+            participantA = p1;
+            participantB = p2;
+        } else {
+            participantA = p2;
+            participantB = p1;
+        }
+        
+        // Ensure we're using the original names from the chat
+        participantA.name = originalNames.personA;
+        participantB.name = originalNames.personB;
+
+        // Render participant analysis sections
+        [participantA, participantB].forEach((participant, index) => {
+            const participantContainer = document.createElement("div");
+            participantContainer.className = "ai-results-container analysis-result";
+            participantContainer.innerHTML = `
+                <div class="participant-analysis">
+                    <h3>${participant.name}'s Analysis</h3>
+                    <div class="interest-level">Interest: ${participant.interestLevel}/10</div>
+                    
+                    <div class="communication-style">
+                        <h4>Communication Style</h4>
+                        <p>${participant.communicationStyle?.generalTraits || 'N/A'}</p>
+                        <p>${participant.communicationStyle?.trustAndEmotionalDepth || 'N/A'}</p>
                     </div>
                     
-                    <div class="red-flags">
-                        <h4>Red Flags</h4>
-                        ${participant.redFlags?.map(flag => `
-                            <div class="flag-item red-flag">
-                                <strong>${flag.title || 'Concern'}:</strong> ${flag.description || 'N/A'}
-                            </div>
-                        `).join('') || '<p>No red flags identified</p>'}
+                    <div class="flags-section">
+                        <div class="green-flags">
+                            <h4>Green Flags</h4>
+                            ${participant.greenFlags?.map(flag => `
+                                <div class="flag-item green-flag">
+                                    <strong>${flag.title || 'Positive'}:</strong> ${flag.description || 'N/A'}
+                                </div>
+                            `).join('') || '<p>No green flags identified</p>'}
+                        </div>
+                        
+                        <div class="red-flags">
+                            <h4>Red Flags</h4>
+                            ${participant.redFlags?.map(flag => `
+                                <div class="flag-item red-flag">
+                                    <strong>${flag.title || 'Concern'}:</strong> ${flag.description || 'N/A'}
+                                </div>
+                            `).join('') || '<p>No red flags identified</p>'}
+                        </div>
+                    </div>
+                    
+                    <div class="relationship-tip">
+                        <h4>Relationship Tip</h4>
+                        <div class="tip-item">
+                            <strong>${participant.relationshipTip?.title || 'Suggestion'}:</strong>
+                            ${participant.relationshipTip?.description || 'N/A'}
+                        </div>
                     </div>
                 </div>
+            `;
+            
+            // Insert each participant container above the button.
+            if (aiButton && aiButton.parentNode) {
+                aiButton.parentNode.insertBefore(participantContainer, aiButton);
+            } else {
+                aiSection.appendChild(participantContainer);
+            }
+        });
+    }
+
+    // Handle response analysis with proper participant matching
+    if (data.responseAnalysis) {
+        const responseContainer = document.createElement("div");
+        responseContainer.id = "aiResponseContainer";
+        responseContainer.className = "ai-results-container analysis-result";
+        
+        // Determine which response analysis belongs to which participant
+        let responseA = data.responseAnalysis.participantA || data.responseAnalysis.participantB || {};
+        let responseB = data.responseAnalysis.participantB || data.responseAnalysis.participantA || {};
+        
+        // If we have matched participants, use those names
+        const nameA = participantA?.name || originalNames.personA || "Person A";
+        const nameB = participantB?.name || originalNames.personB || "Person B";
+        
+        responseContainer.innerHTML = `
+            <h3 class="title subtitle">Response Analysis</h3>
+            <div class="ai-content">
+                <p><strong>${nameA}:</strong>
+                ${responseA.explanation || 'No analysis available'}</p>
                 
-                <div class="relationship-tip">
-                    <h4>Relationship Tip</h4>
-                    <div class="tip-item">
-                        <strong>${participant.relationshipTip?.title || 'Suggestion'}:</strong>
-                        ${participant.relationshipTip?.description || 'N/A'}
-                    </div>
-                </div>
+                <p><strong>${nameB}:</strong>
+                ${responseB.explanation || 'No analysis available'}</p>
             </div>
         `;
-        // Insert each participant container above the button.
+        
+        // Insert response analysis above the button.
         if (aiButton && aiButton.parentNode) {
-          aiButton.parentNode.insertBefore(participantContainer, aiButton);
+            aiButton.parentNode.insertBefore(responseContainer, aiButton);
         } else {
-          aiSection.appendChild(participantContainer);
+            aiSection.appendChild(responseContainer);
         }
-      });
     }
-  
-    // Create and insert Response Analysis container.
-    if (data.responseAnalysis) {
-      const responseContainer = document.createElement("div");
-      responseContainer.id = "aiResponseContainer";
-      responseContainer.className = "ai-results-container analysis-result";
-      responseContainer.innerHTML = `
-          <h3 class="title subtitle">Response Analysis</h3>
-          <div class="ai-content">
-              <p><strong>${originalNames.personA || "Person A"}:</strong>
-              ${data.responseAnalysis.participantA?.explanation || 'No analysis available'}</p>
-              
-              <p><strong>${originalNames.personB || "Person B"}:</strong>
-              ${data.responseAnalysis.participantB?.explanation || 'No analysis available'}</p>
-          </div>
-      `;
-      // Insert response analysis above the button.
-      if (aiButton && aiButton.parentNode) {
-        aiButton.parentNode.insertBefore(responseContainer, aiButton);
-      } else {
-        aiSection.appendChild(responseContainer);
-      }
+}
+
+// Helper function for string similarity comparison
+function stringSimilarity(str1, str2) {
+    if (!str1 || !str2) return 0;
+    
+    // Simple similarity check - can be enhanced with more advanced algorithms
+    str1 = str1.toLowerCase().trim();
+    str2 = str2.toLowerCase().trim();
+    
+    // Check for exact match
+    if (str1 === str2) return 1;
+    
+    // Check if one is contained in the other
+    if (str1.includes(str2)) return 0.8;
+    if (str2.includes(str1)) return 0.8;
+    
+    // Check for common patterns (like first name matching)
+    const str1FirstWord = str1.split(' ')[0];
+    const str2FirstWord = str2.split(' ')[0];
+    if (str1FirstWord === str2FirstWord) return 0.7;
+    
+    // Check for abbreviations
+    if (str1.startsWith(str2FirstWord) || str2.startsWith(str1FirstWord)) {
+        return 0.6;
     }
-  }
-  
+    
+    return 0;
+}
 
    
 async function handleAIClick() {

@@ -26,6 +26,62 @@
         }
     }
 
+    function setupGoogleSignIn() {
+        const signinButton = document.getElementById('signin-button');
+        
+        if (!signinButton) return;
+        
+        window.google.accounts.id.initialize({
+            client_id: '969099711725-hldrjpjo3le920chng1ethgbbc71vald.apps.googleusercontent.com',
+            callback: handleCredentialResponse
+        });
+        
+        window.google.accounts.id.renderButton(
+            signinButton,
+            { theme: 'outline', size: 'medium' }
+        );
+        
+        window.google.accounts.id.prompt();
+    }
+
+    function handleCredentialResponse(response) {
+        // Verify the credential with your backend if needed
+        console.log('Google Sign-In response:', response);
+        
+        // Store user info in localStorage
+        const userInfo = parseJwt(response.credential);
+        localStorage.setItem('user', JSON.stringify(userInfo));
+        localStorage.setItem('isLoggedIn', 'true');
+        
+        // Update UI
+        updateSignInStatus();
+    }
+
+    function parseJwt(token) {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        return JSON.parse(jsonPayload);
+    }
+
+    function updateSignInStatus() {
+        const signinButton = document.getElementById('signin-button');
+        const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+        
+        if (isLoggedIn) {
+            const user = JSON.parse(localStorage.getItem('user'));
+            signinButton.innerHTML = `Signed in as ${user.name}`;
+            // Remove blur if user is logged in
+            const aiSection = document.getElementById('aiAnalysisSection');
+            if (aiSection) {
+                aiSection.classList.remove('blurred');
+            }
+        }
+    }
+
     function setupDragDrop() {
         const fileInput = document.getElementById('fileInput');
         const fileInfo = document.getElementById('fileInfo');
@@ -170,26 +226,37 @@
     function setupGuideToggle() {
         const toggle = document.querySelector('.guide-toggle');
         const content = document.querySelector('.guide-content');
-        
+    
         if (toggle && content) {
+            // Clean click handler
             toggle.addEventListener('click', function(e) {
-                e.stopPropagation();
-                toggle.classList.toggle('active');
+                e.preventDefault();
+                this.classList.toggle('active');
                 content.classList.toggle('active');
+    
+                // Force remove any lingering classes
+                this.classList.remove('hover', 'active-hover', 'processing');
             });
-            
-            if (window.innerWidth <= 768) {
-                toggle.classList.add('active');
-                content.classList.add('active');
-            }
+    
+            // Mobile-specific: reset styles after touch
+            toggle.addEventListener('touchend', function() {
+                setTimeout(() => {
+                    this.style.backgroundColor = '';
+                    this.style.color = '';
+                    this.classList.remove('active'); // Ensure effect doesn't persist
+                }, 100);
+            });
         }
     }
+    
 
     document.addEventListener('DOMContentLoaded', () => {
         initializeElements();
         setupDragDrop();
         setupGuideToggle();
-        updateUploadInterface(); // Ensure proper initial state
+        updateUploadInterface();
+        setupGoogleSignIn();
+        updateSignInStatus(); // Check login status on page load
     });
 
     window.addEventListener('resize', function() {

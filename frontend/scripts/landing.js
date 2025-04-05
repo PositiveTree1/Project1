@@ -15,7 +15,7 @@ function handleCredentialResponse(response) {
   // Initialize Google Sign-In
   window.onload = function() {
     google.accounts.id.initialize({
-      client_id: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
+      client_id: '969099711725-hldrjpjo3le920chng1ethgbbc71vald.apps.googleusercontent.com',
       callback: handleCredentialResponse,
       context: 'signin'
     });

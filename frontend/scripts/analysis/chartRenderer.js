@@ -1593,6 +1593,7 @@ function renderStreakStats(streakStats) {
     statsContainer.appendChild(streakDiv);
 }
 
+// Update renderAIAnalysisSection function
 function renderAIAnalysisSection() {
     // Remove any existing section
     const existingSection = document.getElementById("aiAnalysisSection");
@@ -1601,16 +1602,40 @@ function renderAIAnalysisSection() {
     // Create new container
     const aiSection = document.createElement("div");
     aiSection.id = "aiAnalysisSection";
-    aiSection.className = "ai-analysis-section";
+    aiSection.className = "ai-analysis-section blurred";
+    
+    // Check if user is logged in
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
     
     // Build the HTML structure
     aiSection.innerHTML = `
         <h2 class="title subtitle">AI Analysis</h2>
         <div class="ai-analysis-container">
-            <div id="aiOverallContainer" class="ai-results-container"></div>
-            <div id="aiParticipantAContainer" class="ai-results-container"></div>
-            <div id="aiParticipantBContainer" class="ai-results-container"></div>
-            <button id="aiAnalysisButton" class="ai-button">Analyze with AI</button>
+            ${isLoggedIn ? `
+                <div class="ai-results-container">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Analyzing with AI...</div>
+                </div>
+            ` : `
+                <div class="ai-blur-overlay">
+                    <div class="ai-blur-content">
+                        <p>Sign in to unlock deep AI analysis</p>
+                        <div id="aiSigninButton" class="signin-button"></div>
+                    </div>
+                </div>
+                <div class="ai-results-container placeholder">
+                    <!-- Placeholder content that will be blurred -->
+                    <div class="ai-section">
+                        <h3>Overall Connection</h3>
+                        <p><strong>Friends</strong></p>
+                        <p>Your chat shows a friendly connection with regular communication.</p>
+                    </div>
+                    <div class="ai-section">
+                        <h3>Evolution</h3>
+                        <p>The conversation has remained consistent over time with occasional peaks.</p>
+                    </div>
+                </div>
+            `}
         </div>
     `;
 
@@ -1618,13 +1643,19 @@ function renderAIAnalysisSection() {
     const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
     (chatAnalyticsSection || document.body).appendChild(aiSection);
 
-    return {
-        button: document.getElementById("aiAnalysisButton"),
-        containers: {
-            overall: document.getElementById("aiOverallContainer"),
-            participantA: document.getElementById("aiParticipantAContainer"),
-            participantB: document.getElementById("aiParticipantBContainer")
+    // If not logged in, set up the sign-in button in the overlay
+    if (!isLoggedIn) {
+        const aiSigninButton = document.getElementById("aiSigninButton");
+        if (aiSigninButton) {
+            window.google.accounts.id.renderButton(
+                aiSigninButton,
+                { theme: 'filled_blue', size: 'medium' }
+            );
         }
-    };
-} 
-  
+    } else {
+        // If logged in, immediately start AI analysis
+        setTimeout(() => {
+            handleAIClick();
+        }, 1000);
+    }
+}

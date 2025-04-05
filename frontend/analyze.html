@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>WhatsApp Chat Stats</title>
   <link rel="stylesheet" href="styles/analysis.css">
+  <!-- Add this to both HTML files in the head section -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <!-- Top Section: Dark background for controls -->
@@ -20,11 +22,11 @@
           <div class="upload-icon">📁</div>
           <p id="upload-text">Drag & drop your .txt or .zip file here</p>
           <span>or</span>
-          <button class="cta-button desktop-upload-button" onclick="document.getElementById('fileInput').click()">Select File</button>
+          <button class="cta-button desktop-upload-button">Select File</button>
         </div>
         
         <!-- Mobile-only button -->
-        <button class="cta-button mobile-upload-button" onclick="document.getElementById('fileInput').click()">Select File</button>
+        <button class="cta-button mobile-upload-button">Select File</button>
         
         <input type="file" id="fileInput" accept=".txt, .zip" hidden>
         <div class="file-info" id="fileInfo">
@@ -52,7 +54,7 @@
         </div>
 
         <div class="upload-guide">
-          <button class="guide-toggle">How to export your WhatsApp chats ▼</button>
+          <button class="guide-toggle">How to Export</button>
           <div class="guide-content">
             <div class="guide-step">
               <div class="step-number">1</div>

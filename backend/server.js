@@ -4,19 +4,20 @@ const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
-
 // Initialize Express
 const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+// Increase payload size limit (50MB) using Express's built-in parsers
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// 1. Serve static files from frontend directory
+// Serve static files from frontend directory
 const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));
 
-// 2. API Routes
+// API Routes
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyDP6zuw7hLitN7Vj1RwReRsvSSCWdT9hYE');
 const modelConfig = {
     model: "gemini-1.5-flash",
@@ -28,7 +29,6 @@ const modelConfig = {
       seed: 42,
     },
 };
-  
 
 app.post('/api/analyze', async (req, res) => {
   try {
@@ -53,13 +53,28 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// 3. Fallback route - serve index.html for all other requests
+// Fallback routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
-// Add this route to your existing server.js
+
 app.get('/analyze', (req, res) => {
   res.sendFile(path.join(frontendPath, 'analyze.html'));
+});
+
+app.post('/api/verify-google-token', async (req, res) => {
+  try {
+      const { token } = req.body;
+      const ticket = await client.verifyIdToken({
+          idToken: token,
+          audience: process.env.GOOGLE_CLIENT_ID
+      });
+      const payload = ticket.getPayload();
+      res.json({ success: true, user: payload });
+  } catch (error) {
+      console.error('Token verification failed:', error);
+      res.status(400).json({ success: false, error: 'Invalid token' });
+  }
 });
 
 const PORT = process.env.PORT || 3000;

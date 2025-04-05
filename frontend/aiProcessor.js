@@ -1,59 +1,72 @@
-// In aiProcessor.js - modify the preprocessChatForAI function
+// In aiProcessor.js - improved version
 export function preprocessChatForAI(text, region) {
   if (typeof text !== 'string') {
     throw new Error('Input must be a string');
   }
 
-  // Extract participants and replace with A/B
   const lines = text.split('\n');
   const participants = new Set();
-  const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\] ([^:]+):/;
+  const regex = /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2}):(\d{2})\] ([^:]+):/;
   
-  // First pass to identify participants
-  lines.forEach(line => {
+  // Track participants in order of first appearance
+  const participantOrder = [];
+  
+  // First pass to identify participants in order
+  for (const line of lines) {
     const match = line.match(regex);
     if (match) {
-      participants.add(match[7].trim());
+      const sender = match[7].trim();
+      if (!participants.has(sender)) {
+        participants.add(sender);
+        participantOrder.push(sender);
+        // Exit early once we have 2 participants
+        if (participantOrder.length === 2) break;
+      }
     }
-  });
+  }
   
   // Only proceed if exactly 2 participants
-  if (participants.size !== 2) {
+  if (participantOrder.length !== 2) {
     return null;
   }
   
-  const [personA, personB] = Array.from(participants);
+  const [personA, personB] = participantOrder;
   let processedText = '';
   let processedCount = 0;
   
-  // Second pass to process lines (include simplified date/time)
-  lines.forEach(line => {
+  // Second pass to process lines with proper date handling
+  for (const line of lines) {
     const match = line.match(regex);
     if (match) {
-      const day = match[1];
-      const month = match[2];
-      const year = match[3];
+      // Handle both US (MM/DD/YYYY) and EU (DD/MM/YYYY) formats
+      const day = region === "US" ? match[2] : match[1];
+      const month = region === "US" ? match[1] : match[2];
       const hour = match[4];
       const minute = match[5];
       const sender = match[7].trim();
       const message = line.split(': ').slice(1).join(': ');
-      const replacement = sender === personA ? 'A' : 'B';
-      
-      // Include simplified timestamp [DD/MM HH:mm]
-      processedText += `[${day}/${month} ${hour}:${minute}] ${replacement}: ${message}\n`;
+
+      // Use original names in the processed text
+      processedText += `[${day}/${month} ${hour}:${minute}] ${sender}: ${message}\n`;
       processedCount++;
       
-      // Limit to 5000 messages to manage token usage
-      if (processedCount >= 5000) return;
+      if (processedCount >= 5000) break;
     }
-  });
+  }
   
   return {
     processedText,
-    originalNames: { personA, personB }
+    originalNames: { 
+      personA, 
+      personB,
+      // Add metadata about the order determination
+      _meta: {
+        determinedBy: "first_appearance",
+        regionUsed: region
+      }
+    }
   };
 }
-
   
 export async function analyzeWithAI(preprocessedText) {
   try {
@@ -64,25 +77,26 @@ export async function analyzeWithAI(preprocessedText) {
    - **Explanation:** Provide a brief rationale for your chosen label based on the chat log.
 
 2. Evolution of Interaction:
-   - **Description:** Describe how the communication style and connection evolve throughout the chat.
+   - **Description:** Describe how the communication style and connection evolve throughout the chat, make sure to not mention unrelated messages, eg: such as the whatsapp encryption.
 
 3. Personalized Analysis for Each Participant:
    For each participant, include:
-   - **Interest Level:** Rate their level of interest on a scale from 0 to 10.
+   - **Interest Level:** Rate their level of interest on a scale from 0 to 10, be extremely honest about this.
    - **Communication Style:** Describe their general traits and emotional depth.
    - **Green Flags:** Identify two positive signals (with title and description).
-   - **Red Flags:** Identify two potential concerns (with title and description).
+   - **Red Flags:** Identify two potential concerns (with title and description). Do not mistake humor for serious communication.
    - **Relationship Tip:** Offer one actionable suggestion (with title and description).
 
 4. Response Analysis:
    - **Explanation:** Provide a brief explanation of the response patterns between the two participants, focusing on qualitative observations (for example, delays or notable interaction patterns) without including numerical estimates.
 
 ***Guidelines:***
+- Never quote directly from the chat log.
 - Be very careful to avoid mistaking irony, sarcasm, humour for serious communication.
 - If both participants are communicating in an unusual tone, dont include it in the analysis.
-- Instead of refering to the participants by name, use "This person", or "The other person".
 
-Return your analysis strictly in the following JSON format, while using “This person” and "The other person" for all references:
+
+Return your analysis strictly in the following JSON format, if the persons name is too long, find a way to abbreviate it:
 
 {
   "overallConnection": { "label": "", "explanation": "" },

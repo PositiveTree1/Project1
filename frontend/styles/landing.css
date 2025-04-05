@@ -6,7 +6,7 @@
   --text-color: #333;
   --light-text: #fff;
   --background: #fff;
-  --container-background: #f3e5ff;
+  --container-background: #efd7ff;
   --gradient: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
 }
 
@@ -177,7 +177,7 @@ body {
   background: var(--container-background);
   padding: 2rem;
   border-radius: 15px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.322);
   transition: transform 0.3s;
 }
 

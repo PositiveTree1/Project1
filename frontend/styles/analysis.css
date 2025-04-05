@@ -376,95 +376,161 @@ html {
     gap: 5px;
 }
 
-/* Upload Guide Styles */
 .upload-guide {
-    margin-top: 30px;
+    margin: 30px auto;
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
     border-radius: 16px;
-    padding: 15px;
     overflow: hidden;
     max-width: 800px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  
-  .guide-toggle {
-    background: none;
+    width: calc(100% - 40px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-align: center
+}
+
+.guide-toggle {
+    display: inline-flex; /* Keeps it centered when inside a text-aligned div */
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    padding: 16px;
+    background: transparent !important; /* Force no background */
     border: none;
     color: white;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 500;
-    width: 100%;
-    text-align: left;
-    padding: 10px 0;
+    text-align: center;
     cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .guide-toggle::after {
-    content: '▼';
-    font-size: 0.8rem;
-    transition: transform 0.3s ease;
-  }
-  
-  .guide-toggle.active::after {
-    transform: rotate(180deg);
-  }
-  
-  .guide-content {
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+    margin: 0;
+    gap: 8px;
+    position: relative;
+    overflow: hidden; /* Ensures the effect stays inside */
+}
+
+.guide-toggle::after {
+    content: "";
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    top: 50%;
+    left: 50%;
+    background: rgba(255, 255, 255, 0.2); /* Subtle white flash */
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.guide-toggle:active::after {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+
+/* Plus/Minus Indicator */
+.guide-toggle::before {
+    content: '+';
+    display: inline-block;
+    margin-right: 8px;
+    font-weight: bold;
+    transition: transform 0.2s ease;
+}
+
+.guide-toggle.active::before {
+    content: '-';
+}
+
+/* Content Area */
+.guide-content {
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease;
-  }
-  
-  .guide-content.active {
+    padding: 0 20px;
+    justify-content: center;
+    align-items: center;
+}
+
+.guide-toggle:hover,
+.guide-toggle:active,
+.guide-toggle:focus,
+.guide-toggle.active {
+    background: transparent !important;
+    color: white !important;
+}
+
+.guide-content.active {
     max-height: 1000px;
-  }
-  
-  .guide-step {
+    padding: 0 20px 20px;
+}
+
+/* Step Styling */
+.guide-step {
     display: flex;
-    gap: 15px;
-    margin: 20px 0;
+    gap: 12px;
+    margin: 18px 0;
     align-items: flex-start;
-  }
-  
-  .step-number {
+    justify-content: center;
+}
+
+.step-number {
     background: var(--secondary-color);
     color: white;
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     font-weight: bold;
-  }
-  
-  .step-content h3 {
+    font-size: 0.85rem;
+}
+
+.step-content h3 {
     color: white;
-    margin: 0 0 5px 0;
-    font-size: 1.1rem;
-  }
-  
-  .step-content p {
-    color: rgba(255, 255, 255, 0.9);
+    margin: 0 0 6px 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.step-content p {
+    color: rgba(255, 255, 255, 0.85);
     margin: 0;
-    font-size: 0.95rem;
-  }
-  
-  .guide-note {
-    margin-top: 25px;
-    padding-top: 15px;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.8);
     font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.guide-note {
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85rem;
     text-align: center;
-  }
-  
+}
+
+/* Remove mobile forced open state */
+@media (max-width: 768px) {
+    .guide-toggle {
+        padding: 12px;
+        font-size: 0.95rem;
+    }
+    
+    .guide-step {
+        margin: 15px 0;
+    }
+    
+    .step-content h3 {
+        font-size: 0.95rem;
+    }
+    
+    .step-content p {
+        font-size: 0.85rem;
+    }
+}
+
   /* Mobile optimization for upload area */
 @media (max-width: 768px) {
     .upload-area {
@@ -503,6 +569,7 @@ html {
       margin: 10px auto;
     }
 }
+
 
 .top-section h1 {
     font-size: 40px; /* Smaller font size for mobile */
@@ -1743,6 +1810,8 @@ select {
     padding: 20px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     margin: 0 20px; /* Default side margins */
+    border: 4px solid var(--accent-color);
+
 }
 
 /* Subtitle */
@@ -1962,7 +2031,7 @@ select {
 
 .ai-results-container {
     background: white;
-    border-radius: 12px;
+    border-radius: 20px;
     padding: 20px;
     margin: 15px auto; /* current margins */
     margin-bottom: 30px; /* additional gap at the bottom */
@@ -1970,15 +2039,17 @@ select {
     max-width: 800px;
     text-align: center;       
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 4px solid var(--accent-color);
+
   }
   
 
-  .ai-container-title {
+.ai-container-title {
     color: #3e0057;
     margin-bottom: 15px;
     border-bottom: 1px solid #eee;
     padding-bottom: 10px;
-  }
+}
 
 .ai-container-content {
     padding: 10px;
@@ -2026,17 +2097,17 @@ select {
 }
 
 .green-flag {
-    background-color: rgba(46, 125, 50, 0.1);
+    background-color: rgba(46, 125, 50, 0.315);
     border-left: 4px solid #2e7d32;
 }
 
 .red-flag {
-    background-color: rgba(198, 40, 40, 0.1);
+    background-color: rgba(198, 40, 40, 0.253);
     border-left: 4px solid #c62828;
 }
 
 .tip-item {
-    background-color: rgba(30, 136, 229, 0.1);
+    background-color: rgba(30, 136, 229, 0.164);
     border-left: 4px solid #1e88e5;
     padding: 15px;
     border-radius: 6px;
@@ -2072,7 +2143,7 @@ select {
 @media (max-width: 768px) {
     .ai-results-container {
         padding: 15px;
-        width: 90%;             /* ensure 80% width on mobile as well */
+        width: 85%;             /* ensure 80% width on mobile as well */
         margin-bottom: 30px;
 
       }
@@ -2092,7 +2163,7 @@ select {
     border-radius: 10px;
     padding: 20px;
     margin-top: 20px;
-    width: 90%;
+    width: 85%;
     max-width: 800px;
     margin-left: auto;
     margin-right: auto;
@@ -2159,4 +2230,43 @@ select {
     .stat-grid {
         grid-template-columns: 1fr;
     }
+}
+
+.ai-analysis-section.blurred {
+    position: relative;
+}
+
+.ai-analysis-section.blurred .placeholder {
+    filter: blur(5px);
+    user-select: none;
+    pointer-events: none;
+}
+
+.ai-blur-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.ai-blur-content {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.ai-blur-content p {
+    margin-bottom: 15px;
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
 }
