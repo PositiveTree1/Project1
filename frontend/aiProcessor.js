@@ -94,7 +94,8 @@ export async function analyzeWithAI(preprocessedText) {
 - Never quote directly from the chat log.
 - Be very careful to avoid mistaking irony, sarcasm, humour for serious communication.
 - If both participants are communicating in an unusual tone, dont include it in the analysis.
-
+- When giving the analysis, use the names of the participants as they appear in the chat log, and if the name is too long, use an abbreviation.
+- When giving the analysis, do not gender the participants, do not use any pronouns.
 
 Return your analysis strictly in the following JSON format, if the persons name is too long, find a way to abbreviate it:
 

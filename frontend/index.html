@@ -13,10 +13,23 @@
   <nav class="navbar">
     <div class="container">
       <div class="logo">
-        <img src="assets/logo3.png" alt="WhatsApp AI Analyzer">
-        <span>Whatstatistic</span>
+        <img src="assets/logo6.png" alt="WhatsApp AI Analyzer">
+        <span>ConvoClarity</span>
       </div>
-      <div id="signin-button" class="signin-button"></div>
+      <div class="auth-container">
+        <div id="gSignInWrapper">
+          <div id="googleSignInButton" class="g-signin2"></div>
+          <div class="user-dropdown">
+            <img id="userAvatar" class="user-avatar" src="assets/default-avatar.png" alt="Profile Picture">
+            <div class="dropdown-menu">
+              <a href="analyze.html" class="dropdown-item">Analysis</a>
+              <a href="#" class="dropdown-item">Dashboard</a>
+              <div class="dropdown-divider"></div>
+              <button id="logoutButton" class="dropdown-item">Sign Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
 
@@ -24,7 +37,7 @@
   <section class="hero">
     <div class="container">
       <div class="hero-content">
-        <h1>Unlock Insights from Your WhatsApp Chats with AI</h1>
+        <h1>Unlock Insights from Your Chats with AI</h1>
         <div class="rotating-text">
           <span class="text-item active">Analyze relationship dynamics</span>
           <span class="text-item">Track conversation patterns</span>
@@ -138,5 +151,7 @@
   </footer>
 
   <script src="scripts/landing.js"></script>
+  <script src="scripts/googleSignIn.js"></script>
+
 </body>
 </html>

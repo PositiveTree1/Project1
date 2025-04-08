@@ -1,12 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
 
 :root {
-    --primary-color: #6a3093;
-    --secondary-color: #a044ff;
+    --primary-color: #9162bd;
+    --secondary-color: #852cdd;
     --accent-color: #9967c5;
     --text-color: #333;
-    --light-text: #fff;
+    --light-text: #5a3388;
     --background: #eed4ff;
+    --navBarAnalysis: #c594ee;
     --container-backgroundAccent: #f5f5f5;
     --container-backgroundAccentPlus: #e9e9e9;
     --container-background: #ffffff;
@@ -18,7 +19,7 @@
     margin: 0;
     padding: 0;
     background: var(--background);
-    color: #160020;
+    color: #000000;
     text-align: center;
   }
   
@@ -64,11 +65,11 @@
 }
   
 .upload-area {
-    border: 2px dashed rgba(255, 255, 255, 0.3);
+    border: 2px dashed rgba(130, 86, 180, 0.3);
     border-radius: 20px;
     padding: 3rem 2rem;
     margin: 2rem 0;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(236, 209, 255, 0.349);
     backdrop-filter: blur(10px);
     cursor: pointer;
     transition: opacity 0.3s ease, border-color 0.3s ease;
@@ -106,7 +107,228 @@
     margin: 1rem 0;
     opacity: 0.7;
 }
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    cursor: pointer;
+}
+
+  .logo img {
+    height: 40px; /* Adjust to your logo size */
+  }
   
+.logo span {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #2a0147; /* Optional: purple shade */
+}
+
+  .logo-link {
+    text-decoration: none;  /* Removes underline */
+    color: inherit;         /* Keeps text color from being blue */
+    display: inline-block;  /* Keeps layout sane */
+  }
+  
+  .analysis-header .logo img {
+    height: 30px;
+  }
+
+  
+.analysis-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background-color: var(--navBarAnalysis);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    position: relative;
+    z-index: 100;
+}
+  
+.analysis-header  {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+
+  
+  .analysis-header .logo span {
+    font-weight: 600;
+    font-size: 18px;
+    color: #32004e;
+  }
+  
+  /* Remove the auth-container from the upload section */
+  .upload-container .auth-container {
+    display: none;
+  }
+
+  
+/*Google custom button*/
+
+/* Custom Google Sign-In Button Styles */
+
+
+.custom-google-btn {
+    display: flex;
+    align-items: center;
+    background: white;
+    color: #444;
+    border-radius: 5px;
+    border: thin solid #888;
+    box-shadow: 1px 1px 1px grey;
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+  
+.custom-google-btn:hover {
+    background: #f5f5f5;
+}
+
+  
+.custom-google-btn img {
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+}
+  
+.custom-logout-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+  
+  .custom-logout-btn:hover {
+    background-color: var(--secondary-color);
+  }
+  
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #1c003b;
+  }
+
+  .user-info-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .user-name {
+    font-weight: 500;
+  }
+
+/* User Dropdown Styles */
+.user-dropdown {
+    display: none;
+    position: relative;
+    align-items: center;
+    cursor: pointer;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid rgb(123, 47, 177);
+    transition: transform 0.2s;
+}
+
+.user-avatar:hover {
+    transform: scale(1.05);
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 8px 0;
+    min-width: 180px;
+    z-index: 1000;
+    display: none;
+    margin-top: 10px;
+}
+
+.dropdown-menu.show {
+    display: block;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.dropdown-item {
+    display: block;
+    padding: 10px 16px;
+    color: #333;
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.dropdown-item:hover {
+    background-color: #f5f5f5;
+    color: var(--primary-color);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background-color: #eee;
+    margin: 8px 0;
+}
+
+#logoutButton {
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    color: #333;
+    font-size: 14px;
+}
+
+#logoutButton:hover {
+    color: #d32f2f;
+    background-color: #f5f5f5;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Adjust the auth container for the new layout */
+.auth-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#gSignInWrapper {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+
 .cta-button {
     display: inline-block;
     background: var(--gradient);
@@ -149,7 +371,7 @@
   }
   
   .format-selector select {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--accent-color);
     color: white;
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
@@ -190,7 +412,7 @@
     margin-bottom: 20px;
     display: flex;
     align-items: center;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--navBarAnalysis);
     padding: 12px 20px;
     border-radius: 10px;
     margin: 20px auto;
@@ -378,7 +600,7 @@ html {
 
 .upload-guide {
     margin: 30px auto;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(132, 81, 168, 0.658);
     backdrop-filter: blur(10px);
     border-radius: 16px;
     overflow: hidden;
@@ -585,7 +807,7 @@ html {
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(to bottom, rgb(56, 0, 82), rgb(81, 0, 128));
+    background: var(--background);
     z-index: -1; /* Place it behind the content */
 }
 
@@ -2029,6 +2251,8 @@ select {
     }
 }
 
+/* AI Results and Container Styles */
+
 .ai-results-container {
     background: white;
     border-radius: 20px;
@@ -2050,6 +2274,53 @@ select {
     border-bottom: 1px solid #eee;
     padding-bottom: 10px;
 }
+
+.ai-container-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0);
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    border-radius: inherit; /* Match parent container's border radius */
+}
+
+.ai-container-overlay-content p {
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+.ai-container-overlay-button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.ai-container-overlay-button:hover {
+    background-color: var(--primary-dark);
+}
+
+.ai-container-overlay-content {
+    text-align: center;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--primary-color);
+    max-width: 80%; /* Prevent overlay from being too wide */
+}
+
 
 .ai-container-content {
     padding: 10px;
@@ -2232,41 +2503,275 @@ select {
     }
 }
 
-.ai-analysis-section.blurred {
+.ai-analysis-container {
     position: relative;
+    margin-top: 1rem;
 }
-
-.ai-analysis-section.blurred .placeholder {
-    filter: blur(5px);
-    user-select: none;
-    pointer-events: none;
-}
-
+  
 .ai-blur-overlay {
     position: absolute;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0); /* Slightly opaque white background */
+    backdrop-filter: blur(1px); /* Add the 1px blur */
+    -webkit-backdrop-filter: blur(1px); /* For Safari */
     display: flex;
-    flex-direction: column;
     justify-content: center;
     align-items: center;
     z-index: 10;
-    background: rgba(255, 255, 255, 0.7);
 }
-
-.ai-blur-content {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.sign-in-container {
+    position: relative;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.8); /* Slight background to show it's above */
+    padding: 2rem;
+    border-radius: 1rem;
     text-align: center;
+  }
+
+  .title-container {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+
+  .title-number {
+    font-size: 3rem;
+    font-weight: bold;
+    backdrop-filter: blur(8px); /* Blur only the number */
+    -webkit-backdrop-filter: blur(8px);
+  }
+  
+  .title-word {
+    font-size: 3rem;
+    font-weight: bold;
+    filter: none !important; /* No blur for "intrest" */
+  }
+
+  .sign-in-title {
+    font-size: 2rem;
+    color: #333;
+    filter: none !important; /* No blur */
+  }
+  
+.blur-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(2px); /* Add slight blur */
+    z-index: 0; /* Behind the sign-in container */
+  }
+
+
+.blurred-background {
+    position: relative;
+    filter: blur(2px);
+    opacity: 0.95;
 }
 
+  
+.ai-blur-content {
+    text-align: center;
+    padding: 20px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    border: 2px solid var(--primary-color);
+    backdrop-filter: none; /* Ensure the content isn't blurred */
+    -webkit-backdrop-filter: none;
+    filter: none;
+}
+  
 .ai-blur-content p {
     margin-bottom: 15px;
-    font-size: 18px;
-    font-weight: 500;
+    font-size: 16px;
     color: #333;
+    font-weight: 500;
+}
+
+.blurred-content {
+    filter: blur(10px);
+    pointer-events: none;
+    user-select: none;
+}
+  
+  
+.ai-results-container.placeholder {
+    filter: blur(10px);
+    pointer-events: none;
+    user-select: none;
+    position: relative;
+}
+
+.ai-results-container.placeholder .ai-section {
+    filter: blur(5px);
+    pointer-events: none;
+    user-select: none;
+}
+
+.ai-results-container.placeholder h3 {
+    
+    filter: none !important;
+    color: #3e0057;
+}
+
+.partial-blur-container {
+    position: relative;
+}
+
+.ai-permanent-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    pointer-events: none; /* Allows clicks to pass through to the sign-in button */
+}
+
+.ai-full-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.ai-analysis-container:hover .ai-full-overlay {
+    opacity: 1;
+}
+
+.ai-overlay-content {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    border: 2px solid var(--primary-color);
+    text-align: center;
+    pointer-events: auto; /* Re-enable pointer events for the content */
+}
+
+.ai-overlay-content p {
+    
+    margin-bottom: 15px;
+    font-size: 16px;
+    color: #333;
+    font-weight: 500;
+}
+
+
+.interest-level {
+    font-size: 18px;
+    color: #3e0057;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.interest-level .blurred-content {
+    filter: none; /* Remove blur from the entire container */
+    filter: blur(10px);
+}
+
+.interest-level-score {
+    filter: blur(10px); /* Only blur the score part */
+    display: inline-block;
+}
+
+.blurred-number {
+    filter: blur(2px);
+    display: inline-block;
+}
+
+.ai-permanent-overlay .signin-button {
+    pointer-events: auto;
+}
+
+  /* Popup styles */
+
+  .ai-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  
+  .ai-popup-content {
+    background: white;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 20px;
+    position: relative;
+  }
+  
+  .ai-popup-content h2 {
+    margin-top: 0;
+    color: #6a3093;
+  }
+  
+  .close-popup {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+  }
+  
+  .ai-popup-results {
+    padding: 10px;
+  }
+
+  /* Add to your existing styles */
+.ai-results-container.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(106, 48, 147, 0.2);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s ease-in-out infinite;
+    margin-bottom: 15px;
+}
+
+.loading-text {
+    color: var(--primary-color);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }

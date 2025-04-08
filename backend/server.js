@@ -62,22 +62,33 @@ app.get('/analyze', (req, res) => {
   res.sendFile(path.join(frontendPath, 'analyze.html'));
 });
 
+const { OAuth2Client } = require('google-auth-library');
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 app.post('/api/verify-google-token', async (req, res) => {
-  try {
-      const { token } = req.body;
-      const ticket = await client.verifyIdToken({
-          idToken: token,
-          audience: process.env.GOOGLE_CLIENT_ID
-      });
-      const payload = ticket.getPayload();
-      res.json({ success: true, user: payload });
-  } catch (error) {
-      console.error('Token verification failed:', error);
-      res.status(400).json({ success: false, error: 'Invalid token' });
-  }
+    try {
+        const { token } = req.body;
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+        const payload = ticket.getPayload();
+        res.json({ 
+            success: true, 
+            user: {
+                id: payload.sub,
+                name: payload.name,
+                email: payload.email,
+                picture: payload.picture
+            }
+        });
+    } catch (error) {
+        console.error('Token verification failed:', error);
+        res.status(400).json({ success: false, error: 'Invalid token' });
+    }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://192.168.1.225:${PORT}`);
+  console.log(`Server running on http://192.168.1.225:${PORT} or http://localhost:3000`);
 });

@@ -9,13 +9,36 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
+  <div class="analysis-header">
+    <a href="index.html" class="logo-link">
+      <div class="logo">
+        <img src="assets/Logo6.png" alt="WhatsApp AI Analyzer">
+        <span>ConvoClarity</span>
+      </div>
+    </a>    
+    <div class="auth-container">
+      <div id="gSignInWrapper">
+        <div id="googleSignInButton" class="g-signin2"></div>
+        <div class="user-dropdown">
+          <img id="userAvatar" class="user-avatar" src="assets/default-avatar.png" alt="Profile Picture">
+          <div class="dropdown-menu">
+            <a href="analyze.html" class="dropdown-item">Analysis</a>
+            <a href="#" class="dropdown-item">Dashboard</a>
+            <div class="dropdown-divider"></div>
+            <button id="logoutButton" class="dropdown-item">Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Top Section: Dark background for controls -->
   <div class="top-section">
     <div class="parallax-bg"></div>
     
     <div class="upload-container" id="uploadContainer">
       <div class="upload-content">
-        <h1>Analyze Your WhatsApp Chats</h1>
+        <h1>Analyze Your Chats</h1>
         <p class="subtitle">Upload your chat history to unlock AI-powered insights</p>
         
         <div class="upload-area" id="dropZone">
@@ -36,7 +59,6 @@
         </div>
         
         <div class="action-buttons">
-          <div id="signin-button" class="signin-button"></div>
           <button id="processButton" class="cta-button process-button" disabled>Analyze Chat</button>
         </div>
         
@@ -151,5 +173,7 @@
   <script type="module" src="scripts/analysis/fileProcessor.js"></script>
   <script src="scripts/analysis/chartRenderer.js"></script>
   <script type="module" src="scripts/analysis/parallax.js"></script>
+  <script src="scripts/googleSignIn.js"></script>
+
 </body>
 </html>

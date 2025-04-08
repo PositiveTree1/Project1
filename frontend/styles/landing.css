@@ -177,7 +177,7 @@ body {
   background: var(--container-background);
   padding: 2rem;
   border-radius: 15px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.322);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.137);
   transition: transform 0.3s;
 }
 
@@ -397,3 +397,156 @@ body {
  
 
 /* Remove any existing transform/position properties from .text-item */
+
+/* Google Sign-In Button Styling */
+
+.g-signin2 {
+  margin: 0 auto;
+}
+
+
+.custom-google-btn {
+  display: flex;
+  align-items: center;
+  background: white;
+  color: #444;
+  border-radius: 5px;
+  border: thin solid #888;
+  box-shadow: 1px 1px 1px grey;
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.custom-google-btn:hover {
+  background: #f5f5f5;
+}
+
+
+.custom-google-btn img {
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+}
+
+.custom-logout-btn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  margin-right: 10px;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.custom-logout-btn:hover {
+  background-color: var(--secondary-color);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+/* User Dropdown Styles */
+.user-dropdown {
+  display: none;
+  position: relative;
+  align-items: center;
+  cursor: pointer;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--primary-color);
+  transition: transform 0.2s;
+}
+
+.user-avatar:hover {
+  transform: scale(1.05);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px 0;
+  min-width: 180px;
+  z-index: 1000;
+  display: none;
+  margin-top: 10px;
+}
+
+.dropdown-menu.show {
+  display: block;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.dropdown-item {
+  display: block;
+  padding: 10px 16px;
+  color: #333;
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.dropdown-item:hover {
+  background-color: #f5f5f5;
+  color: var(--primary-color);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background-color: #eee;
+  margin: 8px 0;
+}
+
+#logoutButton {
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: #333;
+  font-size: 14px;
+}
+
+#logoutButton:hover {
+  color: #d32f2f;
+  background-color: #f5f5f5;
+}
+
+@keyframes fadeIn {
+  from {
+      opacity: 0;
+      transform: translateY(-10px);
+  }
+  to {
+      opacity: 1;
+      transform: translateY(0);
+  }
+}
+
+/* Adjust the auth container for the new layout */
+.auth-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#gSignInWrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+}

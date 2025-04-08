@@ -1413,78 +1413,29 @@ function calculateStreakStats(text, region) {
 }
 
 
-document.getElementById('aiAnalysisButton')?.addEventListener('click', async () => {
-    const fileInput = document.getElementById('fileInput');
-    if (fileInput.files.length === 0) {
-      alert('Please select a file first.');
-      return;
-    }
-  
-    const file = fileInput.files[0];
-    const reader = new FileReader();
-  
-    reader.onload = async (event) => {
-      try {
-        // Get text content properly
-        let text;
-        if (file.name.endsWith('.zip')) {
-          const arrayBuffer = event.target.result;
-          const zip = await JSZip.loadAsync(arrayBuffer);
-          const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
-          if (!txtFile) throw new Error('No .txt file in ZIP');
-          text = await zip.files[txtFile].async('text');
-        } else {
-          text = event.target.result;
-        }
-  
-        if (typeof text !== 'string') {
-          throw new Error('Failed to extract text content');
-        }
-  
-        const preprocessed = preprocessChatForAI(text, document.getElementById('regionSelect').value);
-        
-        if (!preprocessed) {
-          alert('AI analysis is only available for chats with exactly two participants.');
-          return;
-        }
-  
-        const aiButton = document.getElementById('aiAnalysisButton');
-        aiButton.disabled = true;
-        aiButton.textContent = 'Analyzing...';
-        
-        const results = await analyzeWithAI(preprocessed.processedText);
-        displayAIResults(results, preprocessed.originalNames);
-      } catch (error) {
-        console.error('AI analysis failed:', error);
-        alert(`AI analysis failed: ${error.message}`);
-      } finally {
-        const aiButton = document.getElementById('aiAnalysisButton');
-        if (aiButton) {
-          aiButton.disabled = false;
-          aiButton.textContent = 'Analyze with AI';
-        }
-      }
-    };
-  
-    if (file.name.endsWith('.zip')) {
-      reader.readAsArrayBuffer(file);
-    } else {
-      reader.readAsText(file);
-    }
-});
+
 
 function displayAIResults(data, originalNames) {
     const aiSection = document.getElementById("aiAnalysisSection");
     if (!aiSection) return;
   
-    // Remove any existing analysis results from a previous run.
+    // Remove loading container if it exists
+    const loadingContainer = document.getElementById("aiLoadingContainer");
+    if (loadingContainer) {
+        loadingContainer.remove();
+    }
+
+    // Remove any existing analysis results from a previous run
     const oldResults = aiSection.querySelectorAll(".analysis-result");
     oldResults.forEach(el => el.remove());
   
-    // Find the analyze button to use as an insertion point.
+    // Remove the (now unused) Analyze with AI button if it exists to avoid an empty container.
     const aiButton = document.getElementById("aiAnalysisButton");
+    if (aiButton && aiButton.parentNode) {
+      aiButton.parentNode.removeChild(aiButton);
+    }
   
-    // Create and insert Overall Analysis container.
+    // Create Overall Analysis container (Overall Connection and Evolution)
     const overallContainer = document.createElement("div");
     overallContainer.className = "ai-results-container analysis-result";
     overallContainer.innerHTML = `
@@ -1498,29 +1449,23 @@ function displayAIResults(data, originalNames) {
             <p>${data.evolution?.description || 'No evolution analysis available'}</p>
         </div>
     `;
-    
-    // Insert overall analysis above the button.
-    if (aiButton && aiButton.parentNode) {
-      aiButton.parentNode.insertBefore(overallContainer, aiButton);
-    } else {
-      aiSection.appendChild(overallContainer);
-    }
-
-    // Improved participant matching logic
+  
+    // Append Overall Analysis container to the AI section.
+    aiSection.appendChild(overallContainer);
+  
+    // Participant Analysis
     let participantA = null;
     let participantB = null;
-    
+  
     if (data.participants?.length === 2) {
-        // Try to match participants by name similarity
         const [p1, p2] = data.participants;
-        
-        // Calculate similarity scores for both possible orders
+  
+        // Use your stringSimilarity helper to match names
         const score1A = stringSimilarity(p1.name, originalNames.personA);
         const score1B = stringSimilarity(p1.name, originalNames.personB);
         const score2A = stringSimilarity(p2.name, originalNames.personA);
         const score2B = stringSimilarity(p2.name, originalNames.personB);
-        
-        // Determine which ordering has the best overall match
+  
         if (score1A + score2B > score1B + score2A) {
             participantA = p1;
             participantB = p2;
@@ -1528,13 +1473,13 @@ function displayAIResults(data, originalNames) {
             participantA = p2;
             participantB = p1;
         }
-        
-        // Ensure we're using the original names from the chat
+  
+        // Force original names from the chat
         participantA.name = originalNames.personA;
         participantB.name = originalNames.personB;
-
-        // Render participant analysis sections
-        [participantA, participantB].forEach((participant, index) => {
+  
+        // Create a container for each participant’s analysis.
+        [participantA, participantB].forEach((participant) => {
             const participantContainer = document.createElement("div");
             participantContainer.className = "ai-results-container analysis-result";
             participantContainer.innerHTML = `
@@ -1577,49 +1522,58 @@ function displayAIResults(data, originalNames) {
                     </div>
                 </div>
             `;
-            
-            // Insert each participant container above the button.
-            if (aiButton && aiButton.parentNode) {
-                aiButton.parentNode.insertBefore(participantContainer, aiButton);
-            } else {
-                aiSection.appendChild(participantContainer);
-            }
+            aiSection.appendChild(participantContainer);
         });
     }
-
-    // Handle response analysis with proper participant matching
+  
+    // Response Analysis (if available)
     if (data.responseAnalysis) {
         const responseContainer = document.createElement("div");
         responseContainer.id = "aiResponseContainer";
         responseContainer.className = "ai-results-container analysis-result";
-        
-        // Determine which response analysis belongs to which participant
+  
+        // Pick the response explanations for each participant.
         let responseA = data.responseAnalysis.participantA || data.responseAnalysis.participantB || {};
         let responseB = data.responseAnalysis.participantB || data.responseAnalysis.participantA || {};
-        
-        // If we have matched participants, use those names
+  
         const nameA = participantA?.name || originalNames.personA || "Person A";
         const nameB = participantB?.name || originalNames.personB || "Person B";
-        
+  
         responseContainer.innerHTML = `
             <h3 class="title subtitle">Response Analysis</h3>
             <div class="ai-content">
-                <p><strong>${nameA}:</strong>
-                ${responseA.explanation || 'No analysis available'}</p>
-                
-                <p><strong>${nameB}:</strong>
-                ${responseB.explanation || 'No analysis available'}</p>
+                <p><strong>${nameA}:</strong> ${responseA.explanation || 'No analysis available'}</p>
+                <p><strong>${nameB}:</strong> ${responseB.explanation || 'No analysis available'}</p>
             </div>
         `;
-        
-        // Insert response analysis above the button.
-        if (aiButton && aiButton.parentNode) {
-            aiButton.parentNode.insertBefore(responseContainer, aiButton);
-        } else {
-            aiSection.appendChild(responseContainer);
-        }
+  
+        aiSection.appendChild(responseContainer);
     }
+  
+    // Call the function to show the pop-up notification.
+    showAnalysisCompletedPopup();
 }
+
+  
+
+function showAnalysisCompletedPopup() {
+    const popup = document.createElement("div");
+    popup.className = "ai-popup";
+    popup.innerHTML = `
+        <div class="ai-popup-content">
+            <button class="close-popup" onclick="this.parentElement.parentElement.remove()">×</button>
+            <h2>AI Analysis Completed</h2>
+            <p>Your chat analysis is now available.</p>
+        </div>
+    `;
+    document.body.appendChild(popup);
+    setTimeout(() => {
+        if (popup.parentElement) {
+            popup.parentElement.removeChild(popup);
+        }
+    }, 3000);
+}
+
 
 // Helper function for string similarity comparison
 function stringSimilarity(str1, str2) {
@@ -1651,68 +1605,262 @@ function stringSimilarity(str1, str2) {
 
    
 async function handleAIClick() {
-    try {
-        const region = document.getElementById('regionSelect').value;
-        const text = window.chatText;
-        
-        if (!text) {
-            alert('Please process a chat first');
-            return;
+    // Check again for sign-in status before proceeding
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    if (!isLoggedIn) {
+      // Should not run analysis if not signed in
+      return;
+    }
+  
+    // Get the chat file (assuming the file input is present and already processed)
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput.files.length === 0) {
+      alert('Please select a file first.');
+      return;
+    }
+  
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+  
+    reader.onload = async (event) => {
+      try {
+        let text;
+        if (file.name.endsWith('.zip')) {
+          const arrayBuffer = event.target.result;
+          const zip = await JSZip.loadAsync(arrayBuffer);
+          const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
+          if (!txtFile) throw new Error('No .txt file in ZIP');
+          text = await zip.files[txtFile].async('text');
+        } else {
+          text = event.target.result;
         }
-        
-        const preprocessed = preprocessChatForAI(text, region);
+  
+        if (typeof text !== 'string') {
+          throw new Error('Failed to extract text content');
+        }
+  
+        const preprocessed = preprocessChatForAI(text, document.getElementById('regionSelect').value);
         if (!preprocessed) {
-            alert('AI analysis requires exactly 2 participants');
-            return;
+          alert('AI analysis is only available for chats with exactly two participants.');
+          return;
         }
-        
-        const aiButton = document.getElementById("aiAnalysisButton");
-        aiButton.disabled = true;
-        aiButton.textContent = "Analyzing...";
-        
-        const analysisResult = await analyzeWithAI(preprocessed.processedText);
-        displayAIResults(analysisResult, preprocessed.originalNames);
-        
-    } catch (error) {
+  
+        // (Optionally, you might want to disable the analysis spinner here)
+        const results = await analyzeWithAI(preprocessed.processedText);
+        displayAIResults(results, preprocessed.originalNames);
+      } catch (error) {
         console.error('AI analysis failed:', error);
         alert(`AI analysis failed: ${error.message}`);
-    } finally {
-        const aiButton = document.getElementById("aiAnalysisButton");
-        if (aiButton) {
-            aiButton.disabled = false;
-            aiButton.textContent = "Analyze with AI";
-        }
+      }
+    };
+  
+    if (file.name.endsWith('.zip')) {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
     }
-}
-  
-  
-function renderAIAnalysisSection() {
+  }
+
+  function renderAIAnalysisSection() {
     // Remove any existing AI Analysis section if present
     let existingSection = document.getElementById("aiAnalysisSection");
-    if (existingSection) {
-      existingSection.remove();
-    }
-    
-    // Create new container structure that only includes the button
+    if (existingSection) existingSection.remove();
+
+    // Create a new container for the AI analysis section
     const aiSection = document.createElement("div");
     aiSection.id = "aiAnalysisSection";
     aiSection.className = "ai-analysis-section";
-    
-    // Only the button is created here; the analysis containers will be added dynamically later.
-    aiSection.innerHTML = `
-      <button id="aiAnalysisButton" class="ai-button">Analyze with AI</button>
-    `;
-    
-    // Add to DOM
-    const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
-    if (chatAnalyticsSection) {
-      chatAnalyticsSection.appendChild(aiSection);
+
+    // Get participant names (if available)
+    const people = Object.keys(window.stats || {});
+    const person1 = people[0] || "Participant 1";
+    const person2 = people[1] || "Participant 2";
+
+    // Check if user is logged in
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+
+    if (isLoggedIn) {
+        // When signed in: show loading state initially
+        aiSection.innerHTML = `
+            <h2 class="title subtitle">AI Analysis</h2>
+            <div class="ai-analysis-container">
+                <div id="aiLoadingContainer" class="ai-results-container loading">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Analyzing with AI...</div>
+                </div>
+            </div>
+        `;
+        
+        // Auto-start the AI analysis after a short delay
+        setTimeout(() => {
+            handleAIClick();
+        }, 500);
     } else {
-      document.body.appendChild(aiSection);
+        // When not signed in: display structured placeholders with selective blur
+        aiSection.innerHTML = `
+            <h2 class="title subtitle">AI Analysis</h2>
+            <div class="ai-analysis-container">
+                <!-- Overall Connection Placeholder -->
+                <div class="ai-results-container">
+                    <div class="ai-section">
+                        <h3>Overall Connection</h3>
+                        <div class="blurred-content">
+                            <p><strong>Placeholder</strong></p>
+                            <p>Curabitur non nisi erat. Fusce ac mi id ipsum congue maximus ut a mauris. Ut in iaculis enim. Nunc sollicitudin quam odio, eu porttitor dui facilisis sed.</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Participant 1 Analysis Placeholder -->
+                <div class="ai-results-container">
+                    <div class="ai-section participant-analysis">
+                        <h3>${person2}'s Analysis</h3>
+                        <div>
+                            <div class="interest-level">
+                                Interest: <span class="interest-level-score blurred-content">7/10</span>
+                            </div>
+
+                            <div class="communication-style">
+                                <h4>Communication Style</h4>
+                                <div class="blurred-content">
+                                    <p>Mauris commodo sem et mollis molestie. Vivamus mollis dui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque.</p>
+                                </div>
+                            </div>
+                            <div class="flags-section">
+                                <div class="green-flags">
+                                    <h4>Green Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item green-flag">
+                                            <strong>Positive Trait:</strong> Mauris commodo sem et mollui quis eleme commodo in ligula ut scelerisque.
+                                        </div>
+                                        <div class="flag-item green-flag">
+                                            <strong>Positive Trait:</strong> Sign in to see green fl green flags Sign in to see green flags Sign in to see green flags
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="red-flags">
+                                    <h4>Red Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item red-flag">
+                                            <strong>Potential Concern:</strong>usequat. Suspendisse commodo in ligula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat volutpat. Nu
+                                        </div>
+                                        <div class="flag-item red-flag">
+                                            <strong>Potential Concern:</strong> Mauris commodo s molestie. Vivamus mollis dui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat 
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="relationship-tip">
+                                <h4>Relationship Tip</h4>
+                                <div class="blurred-content">
+                                    <div class="tip-item">
+                                        <strong>Suggestion:</strong>
+                                        <p>Mauris commodo sem et mollis molestie. Vivgula. Nunc tortor enim, auctor at lacinia vel, pulvinar quis neque.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                    <div class="ai-container-overlay-content">
+                        <p>Sign in to see full analysis</p>
+                        <button class="ai-container-overlay-button" onclick="startSignIn()">
+                            Sign in with Google
+                        </button>
+                    </div>
+                    
+                </div>
+                </div>
+                <!-- Participant 2 Analysis Placeholder -->
+                <div class="ai-results-container">
+                    <div class="ai-section participant-analysis">
+                        <h3>${person2}'s Analysis</h3>
+                        <div>
+                            <div class="interest-level">
+                                Interest: <span class="interest-level-score blurred-content">7/10</span>
+                            </div>
+                            <div class="communication-style">
+                                <h4>Communication Style</h4>
+                                <div class="blurred-content">
+                                    <p>Mauris commodo sem et mollis molestie. Vivamus mollis dui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque.</p>
+                                </div>
+                            </div>
+                            <div class="flags-section">
+                                <div class="green-flags">
+                                    <h4>Green Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item green-flag">
+                                            <strong>Positive Trait:</strong> Mauris commodo sollis dui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque.
+                                        </div>
+                                        <div class="flag-item green-flag">
+                                            <strong>Positive Trait:</strong> Sign in to see green fs Sign in to see green flags Sign in to see green flags
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="red-flags">
+                                    <h4>Red Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item red-flag">
+                                            <strong>Potential Concern:</strong> Mauris commodo sem et mollis molestie. Vivula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat volutpat. Nu
+                                        </div>
+                                        <div class="flag-item red-flag">
+                                            <strong>Potential Concern:</strong>  mollis molestie. Vivamus isse commodo in ligula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat 
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="relationship-tip">
+                                <h4>Relationship Tip</h4>
+                                <div class="blurred-content">
+                                    <div class="tip-item">
+                                        <strong>Suggestion:</strong>
+                                        <p>ui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat volutpat. Nulla et ultricies ligula. Nunc tortor enim, auctor at lacinia vel, pulvinar quis neque.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Response Analysis Placeholder -->
+                <div class="ai-results-container">
+                    <div class="ai-section">
+                        <h3 class="title subtitle">Response Analysis</h3>
+                        <div class="blurred-content">
+                            <div class="ai-content">
+                                <p>Integer tempus ligula sit amet mauris ullamcorper, et accumsan odio ornare. Curabitur eleifend odio quis velit congue fermentum.                                     
+                                 </p>
+                            </div>
+                            <div class="ai-content">
+                                <p>Nullam pulvinar mauris nec urna tincidunt ull.Nullam pulvinar mauris nec urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p                                 
+                                 </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Google Sign-In Overlay -->
+                <div class="ai-blur-overlay">
+                <div class="ai-blur-content">
+                    <p>Sign in to unlock deep AI analysis</p>
+                    <button class="signin-button" onclick="startSignIn()">Sign in with Google</button>
+                </div>
+            </div>
+
+        `;
+
+        // Render the Google Sign-In button if available
+        if (window.google && window.google.accounts && window.google.accounts.id) {
+            const aiSigninButton = document.getElementById("aiSigninButton");
+            if (aiSigninButton) {
+                window.google.accounts.id.renderButton(
+                    aiSigninButton,
+                    { theme: 'filled_blue', size: 'medium' }
+                );
+            }
+        }
     }
-  
-    return {
-      button: document.getElementById("aiAnalysisButton")
-    };
-  }
-  
+
+    // Append the AI analysis section to the designated container
+    const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
+    (chatAnalyticsSection || document.body).appendChild(aiSection);
+
+    return aiSection;
+}
