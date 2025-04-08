@@ -1,6 +1,5 @@
 import stopWords from '../../words/stopWords.js'; // Import the stop words list
 import swearWords from '../../words/words.js'; // Import the swear words list
-
 import { preprocessChatForAI, analyzeWithAI } from '../../aiProcessor.js';
 
 let selectedFile = null;
@@ -198,7 +197,6 @@ function processChatLogFile(text, region) {
                     resultsSection.scrollIntoView({ behavior: 'smooth' });
                 }, 100);
             }
-              
               
               
         });
@@ -1527,28 +1525,59 @@ function displayAIResults(data, originalNames) {
     }
   
     // Response Analysis (if available)
-    if (data.responseAnalysis) {
-        const responseContainer = document.createElement("div");
-        responseContainer.id = "aiResponseContainer";
-        responseContainer.className = "ai-results-container analysis-result";
-  
-        // Pick the response explanations for each participant.
-        let responseA = data.responseAnalysis.participantA || data.responseAnalysis.participantB || {};
-        let responseB = data.responseAnalysis.participantB || data.responseAnalysis.participantA || {};
-  
-        const nameA = participantA?.name || originalNames.personA || "Person A";
-        const nameB = participantB?.name || originalNames.personB || "Person B";
-  
-        responseContainer.innerHTML = `
-            <h3 class="title subtitle">Response Analysis</h3>
-            <div class="ai-content">
-                <p><strong>${nameA}:</strong> ${responseA.explanation || 'No analysis available'}</p>
-                <p><strong>${nameB}:</strong> ${responseB.explanation || 'No analysis available'}</p>
-            </div>
-        `;
-  
-        aiSection.appendChild(responseContainer);
-    }
+    const renderResponseAnalysis = () => {
+        try {
+            const responseContainer = document.createElement("div");
+            responseContainer.className = "ai-results-container analysis-result";
+            
+            // Use original names consistently
+            const nameA = originalNames.personA;
+            const nameB = originalNames.personB;
+
+            // Get explanations using multiple fallback strategies
+            const explanationA = data.responseAnalysis?.[nameA]?.explanation ||
+                               data.responseAnalysis?.participantA?.explanation ||
+                               data.participants?.[0]?.responsePattern ||
+                               "No response analysis available";
+
+            const explanationB = data.responseAnalysis?.[nameB]?.explanation ||
+                               data.responseAnalysis?.participantB?.explanation ||
+                               data.participants?.[1]?.responsePattern ||
+                               "No response analysis available";
+
+            responseContainer.innerHTML = `
+                <div class="ai-section">
+                    <h3>Response Patterns</h3>
+                    <div class="response-analysis-content">
+                        <div class="participant-response">
+                            <h4>${nameA}</h4>
+                            <p>${explanationA}</p>
+                        </div>
+                        <div class="participant-response">
+                            <h4>${nameB}</h4>
+                            <p>${explanationB}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            aiSection.appendChild(responseContainer);
+        } catch (error) {
+            console.error('Failed to render response analysis:', error);
+            const errorDiv = document.createElement("div");
+            errorDiv.className = "ai-error";
+            errorDiv.textContent = "Could not display response analysis (see console for details)";
+            aiSection.appendChild(errorDiv);
+        }
+    };
+
+    // Ensure this runs last and has proper error handling
+    setTimeout(() => {
+        if (data.responseAnalysis || data.participants) {
+            renderResponseAnalysis();
+        }
+    }, 100); // Small delay to ensure other elements are rendered first
+
   
     // Call the function to show the pop-up notification.
     showAnalysisCompletedPopup();
@@ -1647,11 +1676,37 @@ async function handleAIClick() {
   
         // (Optionally, you might want to disable the analysis spinner here)
         const results = await analyzeWithAI(preprocessed.processedText);
+        
+        // Add artificial delay for larger files
+        const startTime = Date.now();
+        await new Promise(resolve => setTimeout(resolve, 500)); // Minimum 500ms delay
+        const processingTime = Date.now() - startTime;
+        
+        if (processingTime < 1000) { // Add extra delay if processing was too fast
+            await new Promise(resolve => setTimeout(resolve, 1000 - processingTime));
+        }
+
+        // Force UI refresh
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        
         displayAIResults(results, preprocessed.originalNames);
-      } catch (error) {
+    } catch (error) {
         console.error('AI analysis failed:', error);
-        alert(`AI analysis failed: ${error.message}`);
-      }
+        // Fallback UI showing error
+        const aiSection = document.getElementById("aiAnalysisSection");
+        if (aiSection) {
+            const errorDiv = document.createElement("div");
+            errorDiv.className = "ai-error";
+            errorDiv.innerHTML = `
+                <h3>Analysis Error</h3>
+                <p>${error.message}</p>
+                <p>Full analysis data is available in console.</p>
+            `;
+            aiSection.appendChild(errorDiv);
+        }
+        // Still log the results if they exist
+        if (results) console.log("Raw AI Results:", results);
+    }
     };
   
     if (file.name.endsWith('.zip')) {
@@ -1665,20 +1720,20 @@ async function handleAIClick() {
     // Remove any existing AI Analysis section if present
     let existingSection = document.getElementById("aiAnalysisSection");
     if (existingSection) existingSection.remove();
-
+    
     // Create a new container for the AI analysis section
     const aiSection = document.createElement("div");
     aiSection.id = "aiAnalysisSection";
     aiSection.className = "ai-analysis-section";
-
+    
     // Get participant names (if available)
     const people = Object.keys(window.stats || {});
     const person1 = people[0] || "Participant 1";
     const person2 = people[1] || "Participant 2";
-
+    
     // Check if user is logged in
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-
+    
     if (isLoggedIn) {
         // When signed in: show loading state initially
         aiSection.innerHTML = `
@@ -1690,7 +1745,6 @@ async function handleAIClick() {
                 </div>
             </div>
         `;
-        
         // Auto-start the AI analysis after a short delay
         setTimeout(() => {
             handleAIClick();
@@ -1701,24 +1755,31 @@ async function handleAIClick() {
             <h2 class="title subtitle">AI Analysis</h2>
             <div class="ai-analysis-container">
                 <!-- Overall Connection Placeholder -->
-                <div class="ai-results-container">
+                <div class="ai-results-container placeholder">
                     <div class="ai-section">
                         <h3>Overall Connection</h3>
-                        <div class="blurred-content">
-                            <p><strong>Placeholder</strong></p>
-                            <p>Curabitur non nisi erat. Fusce ac mi id ipsum congue maximus ut a mauris. Ut in iaculis enim. Nunc sollicitudin quam odio, eu porttitor dui facilisis sed.</p>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p><strong>Placeholder</strong></p>
+                                <p>Curabitur non nisi erat. Fusce ac mi id ipsum congue maximus ut a mauris. Ut in iaculis enim. Nunc sollicitudin quam odio, eu porttitor dui facilisis sed.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton" class="g-signin2"></div>
                         </div>
                     </div>
                 </div>
                 <!-- Participant 1 Analysis Placeholder -->
-                <div class="ai-results-container">
+                <div class="ai-results-container placeholder">
                     <div class="ai-section participant-analysis">
-                        <h3>${person2}'s Analysis</h3>
+                        <h3>${person1}'s Analysis</h3>
                         <div>
                             <div class="interest-level">
                                 Interest: <span class="interest-level-score blurred-content">7/10</span>
                             </div>
-
                             <div class="communication-style">
                                 <h4>Communication Style</h4>
                                 <div class="blurred-content">
@@ -1733,7 +1794,7 @@ async function handleAIClick() {
                                             <strong>Positive Trait:</strong> Mauris commodo sem et mollui quis eleme commodo in ligula ut scelerisque.
                                         </div>
                                         <div class="flag-item green-flag">
-                                            <strong>Positive Trait:</strong> Sign in to see green fl green flags Sign in to see green flags Sign in to see green flags
+                                            <strong>Positive Trait:</strong> Sign in to see green flags
                                         </div>
                                     </div>
                                 </div>
@@ -1761,17 +1822,14 @@ async function handleAIClick() {
                         </div>
                     </div>
                     <div class="ai-container-overlay">
-                    <div class="ai-container-overlay-content">
-                        <p>Sign in to see full analysis</p>
-                        <button class="ai-container-overlay-button" onclick="startSignIn()">
-                            Sign in with Google
-                        </button>
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton1" class="g-signin2"></div>
+                        </div>
                     </div>
-                    
-                </div>
                 </div>
                 <!-- Participant 2 Analysis Placeholder -->
-                <div class="ai-results-container">
+                <div class="ai-results-container placeholder">
                     <div class="ai-section participant-analysis">
                         <h3>${person2}'s Analysis</h3>
                         <div>
@@ -1792,7 +1850,7 @@ async function handleAIClick() {
                                             <strong>Positive Trait:</strong> Mauris commodo sollis dui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque.
                                         </div>
                                         <div class="flag-item green-flag">
-                                            <strong>Positive Trait:</strong> Sign in to see green fs Sign in to see green flags Sign in to see green flags
+                                            <strong>Positive Trait:</strong> Sign in to see green flags
                                         </div>
                                     </div>
                                 </div>
@@ -1819,48 +1877,50 @@ async function handleAIClick() {
                             </div>
                         </div>
                     </div>
-                </div>
-                <!-- Response Analysis Placeholder -->
-                <div class="ai-results-container">
-                    <div class="ai-section">
-                        <h3 class="title subtitle">Response Analysis</h3>
-                        <div class="blurred-content">
-                            <div class="ai-content">
-                                <p>Integer tempus ligula sit amet mauris ullamcorper, et accumsan odio ornare. Curabitur eleifend odio quis velit congue fermentum.                                     
-                                 </p>
-                            </div>
-                            <div class="ai-content">
-                                <p>Nullam pulvinar mauris nec urna tincidunt ull.Nullam pulvinar mauris nec urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p                                 
-                                 </p>
-                            </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton2" class="g-signin2"></div>
                         </div>
                     </div>
                 </div>
-                <!-- Google Sign-In Overlay -->
-                <div class="ai-blur-overlay">
-                <div class="ai-blur-content">
-                    <p>Sign in to unlock deep AI analysis</p>
-                    <button class="signin-button" onclick="startSignIn()">Sign in with Google</button>
+                <!-- Response Analysis Placeholder -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3 class="title subtitle">Response Analysis</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <div class="ai-content">
+                                    <p>Integer tempus ligula sit amet mauris ullamcorper, et accumsan odio ornare. Curabitur eleifend odio quis velit congue fermentum.                                     
+                                     </p>
+                                </div>
+                                <div class="ai-content">
+                                    <p>Nullam pulvinar mauris nec urna tincidunt ull.Nullam pulvinar mauris nec urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p                                 
+                                     </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton3" class="g-signin2"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
         `;
 
-        // Render the Google Sign-In button if available
-        if (window.google && window.google.accounts && window.google.accounts.id) {
-            const aiSigninButton = document.getElementById("aiSigninButton");
-            if (aiSigninButton) {
-                window.google.accounts.id.renderButton(
-                    aiSigninButton,
-                    { theme: 'filled_blue', size: 'medium' }
-                );
+        // Initialize Google Sign-In buttons after a small delay
+        setTimeout(() => {
+            if (window.google && google.accounts && google.accounts.id) {
+                initializeAllGoogleSignins();
             }
-        }
+        }, 100);
     }
-
+    
     // Append the AI analysis section to the designated container
     const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
     (chatAnalyticsSection || document.body).appendChild(aiSection);
-
     return aiSection;
 }

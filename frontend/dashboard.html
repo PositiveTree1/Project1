@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ConvoClarity Dashboard</title>
+  <link rel="stylesheet" href="styles/dashboard.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div class="analysis-header">
+    <a href="index.html" class="logo-link">
+        <div class="logo">
+            <img src="assets/logo6.png" alt="WhatsApp AI Analyzer">
+            <span>ConvoClarity</span>
+        </div>
+    </a>    
+    <div class="auth-container">
+      <div id="gSignInWrapper">
+        <div id="googleSignInButton" class="g-signin2"></div>
+        <div class="user-dropdown">
+          <img id="userAvatar" class="user-avatar" src="assets/default-avatar.png" alt="Profile Picture">
+          <div class="dropdown-menu">
+            <a href="analyze.html" class="dropdown-item">Analysis</a>
+            <a href="dashboard.html" class="dropdown-item">Dashboard</a>
+            <div class="dropdown-divider"></div>
+            <button id="logoutButton" class="dropdown-item">Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard Content -->
+  <div class="dashboard-container">
+    <div class="dashboard-header">
+      <h1>Your Chat Dashboard</h1>
+      <div class="stats-summary">
+        <div class="stat-card">
+          <div class="stat-value" id="totalChats">0</div>
+          <div class="stat-label">Total Chats Analyzed</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-content">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">📊</div>
+        <h2>No chats analyzed yet</h2>
+        <p>Upload your first chat to see detailed analytics</p>
+        <a href="analyze.html" class="cta-button">Analyze Chat</a>
+      </div>
+
+      <div class="chat-list" id="chatList">
+        <!-- Chat cards will be dynamically added here -->
+      </div>
+    </div>
+  </div>
+
+  <script src="scripts/authCheck.js"></script>
+<script>
+    if (window.location.pathname.includes('dashboard.html')) {
+        document.write('<script src="scripts/dashboard.js"><\/script>');
+    }
+</script>
+</body>
+</html>

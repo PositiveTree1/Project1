@@ -408,12 +408,12 @@ body {
 .custom-google-btn {
   display: flex;
   align-items: center;
-  background: white;
+  background: rgb(194, 23, 23);
   color: #444;
   border-radius: 5px;
-  border: thin solid #888;
+  border: thin solid #000000;
   box-shadow: 1px 1px 1px grey;
-  padding: 10px 15px;
+  padding: 10px 10px;
   cursor: pointer;
   transition: background-color 0.3s;
 }
@@ -462,10 +462,10 @@ body {
 }
 
 .user-avatar {
-  width: 40px;
-  height: 40px;
+  width: 35px;
+  height: 35px;
   border-radius: 50%;
-  border: 2px solid var(--primary-color);
+  border: 3px solid rgb(108, 13, 172);
   transition: transform 0.2s;
 }
 

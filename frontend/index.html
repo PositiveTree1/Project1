@@ -23,7 +23,7 @@
             <img id="userAvatar" class="user-avatar" src="assets/default-avatar.png" alt="Profile Picture">
             <div class="dropdown-menu">
               <a href="analyze.html" class="dropdown-item">Analysis</a>
-              <a href="#" class="dropdown-item">Dashboard</a>
+              <a href="dashboard.html" class="dropdown-item">Dashboard</a>
               <div class="dropdown-divider"></div>
               <button id="logoutButton" class="dropdown-item">Sign Out</button>
             </div>
@@ -150,8 +150,12 @@
     </div>
   </footer>
 
-  <script src="scripts/landing.js"></script>
-  <script src="scripts/googleSignIn.js"></script>
+  <script src="scripts/authCheck.js"></script>
+<script>
+    if (window.location.pathname.includes('dashboard.html')) {
+        document.write('<script src="scripts/dashboard.js"><\/script>');
+    }
+</script>
 
 </body>
 </html>

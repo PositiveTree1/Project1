@@ -88,7 +88,7 @@ export async function analyzeWithAI(preprocessedText) {
    - **Relationship Tip:** Offer one actionable suggestion (with title and description).
 
 4. Response Analysis:
-   - **Explanation:** Provide a brief explanation of the response patterns between the two participants, focusing on qualitative observations (for example, delays or notable interaction patterns) without including numerical estimates.
+   - **Explanation:** Provide a brief explanation of the response patterns between the two participants, focusing on qualitative observations (for example, delays or notable interaction patterns) and including numerical estimates.
 
 ***Guidelines:***
 - Never quote directly from the chat log.
@@ -155,6 +155,10 @@ ${preprocessedText}`;
         };
       }
     }
+
+    // Log the AI response to the console
+    console.log('AI Response:', result);
+
     return result;
   } catch (error) {
     console.error('AI analysis failed:', error);

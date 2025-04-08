@@ -30,6 +30,63 @@ const modelConfig = {
     },
 };
 
+
+// Save chat analysis to Firestore
+app.post('/api/save-analysis', async (req, res) => {
+  try {
+    const { userId, analysisData } = req.body;
+    if (!userId || !analysisData) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const docRef = await addDoc(collection(db, 'chatAnalyses'), {
+      userId,
+      analysisData,
+      createdAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, id: docRef.id });
+  } catch (error) {
+    console.error('Error saving analysis:', error);
+    res.status(500).json({ error: 'Failed to save analysis' });
+  }
+});
+
+// Get user's chat analyses
+app.get('/api/get-analyses/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const querySnapshot = await getDocs(collection(db, 'chatAnalyses'));
+    const analyses = [];
+
+    querySnapshot.forEach((doc) => {
+      if (doc.data().userId === userId) {
+        analyses.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      }
+    });
+
+    res.json(analyses);
+  } catch (error) {
+    console.error('Error getting analyses:', error);
+    res.status(500).json({ error: 'Failed to get analyses' });
+  }
+});
+
+// Delete chat analysis
+app.delete('/api/delete-analysis/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await deleteDoc(doc(db, 'chatAnalyses', id));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting analysis:', error);
+    res.status(500).json({ error: 'Failed to delete analysis' });
+  }
+});
+
 app.post('/api/analyze', async (req, res) => {
   try {
     const { chatText } = req.body;

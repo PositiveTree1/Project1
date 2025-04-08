@@ -11,9 +11,15 @@ function renderStackedColumnChart(columnChartData, callback) {
     }
     timelineSection.innerHTML = ""; // Clear any existing content
     
+    // Add "Date & Times" title
+    const dateTimesTitle = document.createElement('h1');
+    dateTimesTitle.className = 'title main-title';
+    dateTimesTitle.textContent = 'Date & Times';
+    timelineSection.appendChild(dateTimesTitle);
+
     // Create container for Timeline chart
     const timelineCard = document.createElement('div');
-    timelineCard.className = 'chart-card timeline-chart-card'; // Added special class
+    timelineCard.className = 'chart-card timeline-chart-card';
     timelineSection.appendChild(timelineCard);
     
     // Add title above the container
@@ -25,37 +31,43 @@ function renderStackedColumnChart(columnChartData, callback) {
     // Create chart container div with special class for wider desktop view
     const columnChartDiv = document.createElement('div');
     columnChartDiv.id = 'columnchartdiv';
-    columnChartDiv.className = 'timeline-chart-container'; // Added special class
+    columnChartDiv.className = 'timeline-chart-container';
     timelineCard.appendChild(columnChartDiv);
 
-    // Limit data points to approximately 130 by averaging chunks if necessary
+    // Calculate total messages per day (sum of all senders)
+    const dailyTotals = originalData.map(dayData => {
+        let total = 0;
+        for (const sender in dayData) {
+            if (sender !== 'date' && sender !== 'dateLabel') {
+                total += dayData[sender] || 0;
+            }
+        }
+        return {
+            date: dayData.date,
+            dateLabel: dayData.dateLabel,
+            total: total
+        };
+    });
+
+    // Limit data points to approximately 130 by grouping days if necessary
     const maxDataPoints = 130;
-    let limitedData = originalData;
-    if (originalData.length > maxDataPoints) {
-        const step = Math.ceil(originalData.length / maxDataPoints);
+    let limitedData = dailyTotals;
+    if (dailyTotals.length > maxDataPoints) {
+        const chunkSize = Math.ceil(dailyTotals.length / maxDataPoints);
         limitedData = [];
-        for (let i = 0; i < originalData.length; i += step) {
-            const chunk = originalData.slice(i, i + step);
-            const averagedPoint = {
+        
+        for (let i = 0; i < dailyTotals.length; i += chunkSize) {
+            const chunk = dailyTotals.slice(i, i + chunkSize);
+            const chunkTotal = chunk.reduce((sum, day) => sum + day.total, 0);
+            
+            limitedData.push({
                 date: chunk[0].date,
-                dateLabel: chunk[0].dateLabel
-            };
-            chunk.forEach(point => {
-                Object.keys(point).forEach(key => {
-                    if (key !== "date" && key !== "dateLabel") {
-                        averagedPoint[key] = (averagedPoint[key] || 0) + point[key];
-                    }
-                });
+                dateLabel: chunk[0].dateLabel,
+                total: chunkTotal // Total messages in this time period
             });
-            Object.keys(averagedPoint).forEach(key => {
-                if (key !== "date" && key !== "dateLabel") {
-                    averagedPoint[key] = averagedPoint[key] / chunk.length;
-                }
-            });
-            limitedData.push(averagedPoint);
         }
     }
-    
+
     // Clear any existing content (already done above)
     columnChartDiv.innerHTML = "";
     
@@ -63,7 +75,7 @@ function renderStackedColumnChart(columnChartData, callback) {
     const canvas = document.createElement("canvas");
     canvas.id = "columnChartCanvas";
     canvas.style.width = "100%";
-    canvas.style.maxWidth = "100%"; // Add this line
+    canvas.style.maxWidth = "100%";
     canvas.style.display = "block";
     canvas.style.height = window.innerWidth < 768 ? "200px" : "300px";
     columnChartDiv.appendChild(canvas);
@@ -72,22 +84,13 @@ function renderStackedColumnChart(columnChartData, callback) {
     // Prepare labels from the limited data using the dateLabel field
     const labels = limitedData.map(dp => dp.dateLabel);
     
-    // Calculate the average messages per day across all senders
-    const averageData = limitedData.map(dp => {
-        let sum = 0, count = 0;
-        for (let key in dp) {
-            if (key !== "date" && key !== "dateLabel") {
-                sum += dp[key];
-                count++;
-            }
-        }
-        return count ? (sum / count) : 0;
-    });
+    // Use the total message counts for the chart
+    const dataValues = limitedData.map(dp => dp.total);
 
-    // Create a single dataset for the average values
+    // Create a single dataset for the message values
     const dataset = {
-        label: "Average Messages",
-        data: averageData,
+        label: "Messages",
+        data: dataValues,
         borderColor: "#a044ff",
         backgroundColor: "rgba(106, 48, 147, 0.1)",
         borderWidth: 3,
@@ -123,6 +126,13 @@ function renderStackedColumnChart(columnChartData, callback) {
             plugins: {
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y} messages`;
+                        }
+                    }
                 }
             },
             scales: {
