@@ -81,21 +81,22 @@ export async function analyzeWithAI(preprocessedText) {
 
 3. Personalized Analysis for Each Participant:
    For each participant, include:
-   - **Interest Level:** Rate their level of interest on a scale from 0 to 10, be extremely honest about this.
+   - **Interest Level:** Rate their level of interest on a scale from 0 to 10, be extremely honest.
    - **Communication Style:** Describe their general traits and emotional depth.
    - **Green Flags:** Identify two positive signals (with title and description).
    - **Red Flags:** Identify two potential concerns (with title and description). Do not mistake humor for serious communication.
    - **Relationship Tip:** Offer one actionable suggestion (with title and description).
 
 4. Response Analysis:
-   - **Explanation:** Provide a brief explanation of the response patterns between the two participants, focusing on qualitative observations (for example, delays or notable interaction patterns) and including numerical estimates.
+   - **Explanation:** Provide a brief explanation of the response patterns between the two participants, focusing on qualitative observations (for example, delays or notable interaction patterns).
 
 ***Guidelines:***
 - Never quote directly from the chat log.
 - Be very careful to avoid mistaking irony, sarcasm, humour for serious communication.
 - If both participants are communicating in an unusual tone, dont include it in the analysis.
 - When giving the analysis, use the names of the participants as they appear in the chat log, and if the name is too long, use an abbreviation.
-- When giving the analysis, do not gender the participants, do not use any pronouns.
+- When giving the analysis, never use any pronouns such as "her", "she" etc.
+- Make your analysis as detailed and insightful as possible, adding depth to your observations.
 
 Return your analysis strictly in the following JSON format, if the persons name is too long, find a way to abbreviate it:
 

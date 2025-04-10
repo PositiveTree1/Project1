@@ -49,6 +49,7 @@
         // Process button click handler
         processButton.addEventListener('click', async function(e) {
             e.stopPropagation();
+
             if (!fileInput.files.length) {
                 alert('Please select a file first');
                 return;
@@ -74,6 +75,41 @@
                 processButton.disabled = false;
             }
         });
+
+        const aiToggleContainer = document.getElementById('aiToggleContainer');
+
+        function updateToggleVisibility() {
+            const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+            if (isLoggedIn) {
+                aiToggleContainer.style.display = 'flex';
+                aiToggleContainer.innerHTML = `
+                    
+                    <label class="ai-toggle-button">
+                        <input type="checkbox" id="aiToggle" checked>
+                        <span class="slider">
+                            <span class="text on">AI</span>
+                            <span class="text off">OFF</span>
+                        </span>
+                    </label>
+                `;
+                
+                // Add event listener for the toggle
+                const aiToggle = document.getElementById('aiToggle');
+                if (aiToggle) {
+                    aiToggle.addEventListener('change', function() {
+                        const aiLoadingContainer = document.getElementById('aiLoadingContainer');
+                        if (aiLoadingContainer) {
+                            aiLoadingContainer.style.display = this.checked ? 'block' : 'none';
+                        }
+                    });
+                }
+            } else {
+                aiToggleContainer.style.display = 'none';
+            }
+        }
+
+        updateToggleVisibility();
+        document.addEventListener('authChange', updateToggleVisibility);
 
         // Drag/drop handlers
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -170,25 +206,12 @@
     function setupGuideToggle() {
         const toggle = document.querySelector('.guide-toggle');
         const content = document.querySelector('.guide-content');
-    
+        
         if (toggle && content) {
-            // Clean click handler
             toggle.addEventListener('click', function(e) {
                 e.preventDefault();
-                this.classList.toggle('active');
                 content.classList.toggle('active');
-    
-                // Force remove any lingering classes
-                this.classList.remove('hover', 'active-hover', 'processing');
-            });
-    
-            // Mobile-specific: reset styles after touch
-            toggle.addEventListener('touchend', function() {
-                setTimeout(() => {
-                    this.style.backgroundColor = '';
-                    this.style.color = '';
-                    this.classList.remove('active'); // Ensure effect doesn't persist
-                }, 100);
+                this.classList.toggle('active');
             });
         }
     }

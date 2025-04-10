@@ -133,9 +133,7 @@ function processChatLogFile(text, region) {
     });
 
     // Render the person selection panel only if there are more than two people
-    if (people.length > 2) {
-        renderPersonSelectionPanel(people);
-    }
+    
 
     // Render the stacked column chart, and when done, render the other charts
     if (window.renderStackedColumnChart) {
@@ -524,11 +522,12 @@ function calculateAdditionalStats(text, region) {
             totalMessagesPerSender[sender] = (totalMessagesPerSender[sender] || 0) + 1;
 
             // Track swear words
+            // Improved version
             if (!totalSwearWordsPerSender[sender]) totalSwearWordsPerSender[sender] = 0;
             const words = message.split(/\s+/).filter(word => word.trim() !== "");
             words.forEach(word => {
-                const lowerWord = word.toLowerCase();
-                if (swearWords.includes(lowerWord)) {
+                const cleanWord = word.toLowerCase().replace(/[^\w\s]/g, ""); // Remove punctuation
+                if (cleanWord && swearWords.includes(cleanWord)) {
                     totalSwearWordsPerSender[sender]++;
                 }
             });
@@ -1228,25 +1227,44 @@ function calculateConvoStats(text, region) {
     const overallAverage = overallCount > 0 ? totalMessages / overallCount : 0;
 
     // Define time periods for frequency comparison
-    const now = Date.now();
+    const endDate = window.dateRange?.endDate ? 
+        new Date(window.dateRange.endDate).getTime() : 
+        Date.now();
+    
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
     
-    const last30 = mergedConvos.filter(conv => conv.startTime >= now - thirtyDays);
-    const prev30 = mergedConvos.filter(conv => conv.startTime < now - thirtyDays && conv.startTime >= now - 2 * thirtyDays);
-
-    // Calculate percentage change
+    const last30 = mergedConvos.filter(conv => 
+        conv.startTime >= endDate - thirtyDays
+    );
+    const prev30 = mergedConvos.filter(conv => 
+        conv.startTime >= endDate - 2 * thirtyDays && 
+        conv.startTime < endDate - thirtyDays
+    );
+    
     let freqPercentageChange = 0;
-    if (prev30.length > 0) {
+    let trend = "neutral";
+    
+    // Handle all edge cases
+    if (last30.length === 0 && prev30.length === 0) {
+        // No conversations in either period
+        trend = "none";
+    } else if (prev30.length === 0) {
+        // No previous conversations, but current ones exist
+        trend = last30.length > 0 ? "up" : "none";
+        freqPercentageChange = last30.length > 0 ? Infinity : 0;
+    } else {
+        // Standard case with both periods having data
         freqPercentageChange = ((last30.length - prev30.length) / prev30.length) * 100;
-    } else if (last30.length > 0) {
-        freqPercentageChange = 100;
+        trend = freqPercentageChange > 0 ? "up" : 
+               freqPercentageChange < 0 ? "down" : "equal";
     }
-
+    
     return {
         averageLength: overallAverage.toFixed(1),
         frequencyLast30: last30.length,
         frequencyPrev30: prev30.length,
         freqPercentageChange: Number(freqPercentageChange.toFixed(1)),
+        trend,
         totalConversations: mergedConvos.length
     };
 }
@@ -1420,18 +1438,12 @@ function displayAIResults(data, originalNames) {
     // Remove loading container if it exists
     const loadingContainer = document.getElementById("aiLoadingContainer");
     if (loadingContainer) {
-        loadingContainer.remove();
+      loadingContainer.remove();
     }
-
+  
     // Remove any existing analysis results from a previous run
     const oldResults = aiSection.querySelectorAll(".analysis-result");
     oldResults.forEach(el => el.remove());
-  
-    // Remove the (now unused) Analyze with AI button if it exists to avoid an empty container.
-    const aiButton = document.getElementById("aiAnalysisButton");
-    if (aiButton && aiButton.parentNode) {
-      aiButton.parentNode.removeChild(aiButton);
-    }
   
     // Create Overall Analysis container (Overall Connection and Evolution)
     const overallContainer = document.createElement("div");
@@ -1447,143 +1459,139 @@ function displayAIResults(data, originalNames) {
             <p>${data.evolution?.description || 'No evolution analysis available'}</p>
         </div>
     `;
-  
-    // Append Overall Analysis container to the AI section.
     aiSection.appendChild(overallContainer);
   
-    // Participant Analysis
+    // Handle Response Analysis - more robust version
+    try {
+        if (data.responseAnalysis || (data.participants && data.participants.length >= 2)) {
+            const responseContainer = document.createElement("div");
+            responseContainer.className = "ai-results-container analysis-result";
+            
+            // Get participant names (use original names as fallback)
+            const nameA = originalNames?.personA || (data.participants?.[0]?.name || "Participant 1");
+            const nameB = originalNames?.personB || (data.participants?.[1]?.name || "Participant 2");
+            
+            // Safely get response explanations with multiple fallback options
+            let explanationA = '';
+            let explanationB = '';
+            
+            // First try to get from responseAnalysis object
+            if (data.responseAnalysis) {
+                explanationA = data.responseAnalysis.participantA?.explanation || 
+                             data.responseAnalysis[nameA]?.explanation || 
+                             data.responseAnalysis[0]?.explanation || 
+                             'No analysis available';
+                explanationB = data.responseAnalysis.participantB?.explanation || 
+                             data.responseAnalysis[nameB]?.explanation || 
+                             data.responseAnalysis[1]?.explanation || 
+                             'No analysis available';
+            }
+            
+            // If still not found, try participants array
+            if ((!explanationA || !explanationB) && data.participants?.length >= 2) {
+                explanationA = data.participants[0]?.responsePattern || 
+                             data.participants[0]?.responseAnalysis?.explanation || 
+                             explanationA;
+                explanationB = data.participants[1]?.responsePattern || 
+                             data.participants[1]?.responseAnalysis?.explanation || 
+                             explanationB;
+            }
+            
+            // Final fallback if still empty
+            if (!explanationA) explanationA = 'No analysis available';
+            if (!explanationB) explanationB = 'No analysis available';
+            
+            responseContainer.innerHTML = `
+                <h3 class="title subtitle">Response Analysis</h3>
+                <div class="ai-content">
+                    <p><strong>${nameA}:</strong> ${explanationA}</p>
+                    <p><strong>${nameB}:</strong> ${explanationB}</p>
+                </div>
+            `;
+            aiSection.appendChild(responseContainer);
+        }
+    } catch (error) {
+        console.error("Error rendering response analysis:", error);
+    }
+  
+    // Participant Analysis (only proceed if exactly 2 participants are found)
     let participantA = null;
     let participantB = null;
   
     if (data.participants?.length === 2) {
-        const [p1, p2] = data.participants;
+      const [p1, p2] = data.participants;
   
-        // Use your stringSimilarity helper to match names
-        const score1A = stringSimilarity(p1.name, originalNames.personA);
-        const score1B = stringSimilarity(p1.name, originalNames.personB);
-        const score2A = stringSimilarity(p2.name, originalNames.personA);
-        const score2B = stringSimilarity(p2.name, originalNames.personB);
+      // Use a string similarity helper to match names
+      const score1A = stringSimilarity(p1.name, originalNames.personA);
+      const score1B = stringSimilarity(p1.name, originalNames.personB);
+      const score2A = stringSimilarity(p2.name, originalNames.personA);
+      const score2B = stringSimilarity(p2.name, originalNames.personB);
   
-        if (score1A + score2B > score1B + score2A) {
-            participantA = p1;
-            participantB = p2;
-        } else {
-            participantA = p2;
-            participantB = p1;
-        }
+      if (score1A + score2B > score1B + score2A) {
+        participantA = p1;
+        participantB = p2;
+      } else {
+        participantA = p2;
+        participantB = p1;
+      }
   
-        // Force original names from the chat
-        participantA.name = originalNames.personA;
-        participantB.name = originalNames.personB;
+      // Force original names from the chat log
+      participantA.name = originalNames.personA;
+      participantB.name = originalNames.personB;
   
-        // Create a container for each participant’s analysis.
-        [participantA, participantB].forEach((participant) => {
-            const participantContainer = document.createElement("div");
-            participantContainer.className = "ai-results-container analysis-result";
-            participantContainer.innerHTML = `
-                <div class="participant-analysis">
-                    <h3>${participant.name}'s Analysis</h3>
-                    <div class="interest-level">Interest: ${participant.interestLevel}/10</div>
-                    
-                    <div class="communication-style">
-                        <h4>Communication Style</h4>
-                        <p>${participant.communicationStyle?.generalTraits || 'N/A'}</p>
-                        <p>${participant.communicationStyle?.trustAndEmotionalDepth || 'N/A'}</p>
+      // Create a container for each participant's analysis
+      [participantA, participantB].forEach((participant) => {
+        const participantContainer = document.createElement("div");
+        participantContainer.className = "ai-results-container analysis-result";
+        participantContainer.innerHTML = `
+            <div class="participant-analysis">
+                <h3>${participant.name}'s Analysis</h3>
+                <div class="interest-level">Interest: ${participant.interestLevel}/10</div>
+                
+                <div class="communication-style">
+                    <h4>Communication Style</h4>
+                    <p>${participant.communicationStyle?.generalTraits || 'N/A'}</p>
+                    <p>${participant.communicationStyle?.trustAndEmotionalDepth || 'N/A'}</p>
+                </div>
+                
+                <div class="flags-section">
+                    <div class="green-flags">
+                        <h4>Green Flags</h4>
+                        ${participant.greenFlags?.map(flag => `
+                            <div class="flag-item green-flag">
+                                <strong>${flag.title || 'Positive'}:</strong> ${flag.description || 'N/A'}
+                            </div>
+                        `).join('') || '<p>No green flags identified</p>'}
                     </div>
                     
-                    <div class="flags-section">
-                        <div class="green-flags">
-                            <h4>Green Flags</h4>
-                            ${participant.greenFlags?.map(flag => `
-                                <div class="flag-item green-flag">
-                                    <strong>${flag.title || 'Positive'}:</strong> ${flag.description || 'N/A'}
-                                </div>
-                            `).join('') || '<p>No green flags identified</p>'}
-                        </div>
-                        
-                        <div class="red-flags">
-                            <h4>Red Flags</h4>
-                            ${participant.redFlags?.map(flag => `
-                                <div class="flag-item red-flag">
-                                    <strong>${flag.title || 'Concern'}:</strong> ${flag.description || 'N/A'}
-                                </div>
-                            `).join('') || '<p>No red flags identified</p>'}
-                        </div>
-                    </div>
-                    
-                    <div class="relationship-tip">
-                        <h4>Relationship Tip</h4>
-                        <div class="tip-item">
-                            <strong>${participant.relationshipTip?.title || 'Suggestion'}:</strong>
-                            ${participant.relationshipTip?.description || 'N/A'}
-                        </div>
+                    <div class="red-flags">
+                        <h4>Red Flags</h4>
+                        ${participant.redFlags?.map(flag => `
+                            <div class="flag-item red-flag">
+                                <strong>${flag.title || 'Concern'}:</strong> ${flag.description || 'N/A'}
+                            </div>
+                        `).join('') || '<p>No red flags identified</p>'}
                     </div>
                 </div>
-            `;
-            aiSection.appendChild(participantContainer);
-        });
+                
+                <div class="relationship-tip">
+                    <h4>Relationship Tip</h4>
+                    <div class="tip-item">
+                        <strong>${participant.relationshipTip?.title || 'Suggestion'}:</strong>
+                        ${participant.relationshipTip?.description || 'N/A'}
+                    </div>
+                </div>
+            </div>
+        `;
+        aiSection.appendChild(participantContainer);
+      });
     }
   
-    // Response Analysis (if available)
-    const renderResponseAnalysis = () => {
-        try {
-            const responseContainer = document.createElement("div");
-            responseContainer.className = "ai-results-container analysis-result";
-            
-            // Use original names consistently
-            const nameA = originalNames.personA;
-            const nameB = originalNames.personB;
-
-            // Get explanations using multiple fallback strategies
-            const explanationA = data.responseAnalysis?.[nameA]?.explanation ||
-                               data.responseAnalysis?.participantA?.explanation ||
-                               data.participants?.[0]?.responsePattern ||
-                               "No response analysis available";
-
-            const explanationB = data.responseAnalysis?.[nameB]?.explanation ||
-                               data.responseAnalysis?.participantB?.explanation ||
-                               data.participants?.[1]?.responsePattern ||
-                               "No response analysis available";
-
-            responseContainer.innerHTML = `
-                <div class="ai-section">
-                    <h3>Response Patterns</h3>
-                    <div class="response-analysis-content">
-                        <div class="participant-response">
-                            <h4>${nameA}</h4>
-                            <p>${explanationA}</p>
-                        </div>
-                        <div class="participant-response">
-                            <h4>${nameB}</h4>
-                            <p>${explanationB}</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            aiSection.appendChild(responseContainer);
-        } catch (error) {
-            console.error('Failed to render response analysis:', error);
-            const errorDiv = document.createElement("div");
-            errorDiv.className = "ai-error";
-            errorDiv.textContent = "Could not display response analysis (see console for details)";
-            aiSection.appendChild(errorDiv);
-        }
-    };
-
-    // Ensure this runs last and has proper error handling
-    setTimeout(() => {
-        if (data.responseAnalysis || data.participants) {
-            renderResponseAnalysis();
-        }
-    }, 100); // Small delay to ensure other elements are rendered first
-
-  
-    // Call the function to show the pop-up notification.
+    // Show the analysis completed popup after rendering all results
     showAnalysisCompletedPopup();
 }
 
-  
+
 
 function showAnalysisCompletedPopup() {
     const popup = document.createElement("div");
@@ -1640,6 +1648,16 @@ async function handleAIClick() {
       // Should not run analysis if not signed in
       return;
     }
+
+    const aiToggle = document.getElementById('aiToggle');
+    if (aiToggle && !aiToggle.checked) {
+        // Remove any existing AI loading container
+        const aiLoadingContainer = document.getElementById('aiLoadingContainer');
+        if (aiLoadingContainer) {
+            aiLoadingContainer.remove();
+        }
+        return; // Don't run AI analysis if toggle is off
+    }
   
     // Get the chat file (assuming the file input is present and already processed)
     const fileInput = document.getElementById('fileInput');
@@ -1676,7 +1694,9 @@ async function handleAIClick() {
   
         // (Optionally, you might want to disable the analysis spinner here)
         const results = await analyzeWithAI(preprocessed.processedText);
+
         
+
         // Add artificial delay for larger files
         const startTime = Date.now();
         await new Promise(resolve => setTimeout(resolve, 500)); // Minimum 500ms delay
@@ -1690,7 +1710,8 @@ async function handleAIClick() {
         await new Promise(resolve => requestAnimationFrame(resolve));
         
         displayAIResults(results, preprocessed.originalNames);
-    } catch (error) {
+
+        } catch (error) {
         console.error('AI analysis failed:', error);
         // Fallback UI showing error
         const aiSection = document.getElementById("aiAnalysisSection");
@@ -1714,9 +1735,9 @@ async function handleAIClick() {
     } else {
       reader.readAsText(file);
     }
-  }
+}
 
-  function renderAIAnalysisSection() {
+function renderAIAnalysisSection() {
     // Remove any existing AI Analysis section if present
     let existingSection = document.getElementById("aiAnalysisSection");
     if (existingSection) existingSection.remove();
@@ -1735,21 +1756,31 @@ async function handleAIClick() {
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
     
     if (isLoggedIn) {
-        // When signed in: show loading state initially
-        aiSection.innerHTML = `
-            <h2 class="title subtitle">AI Analysis</h2>
-            <div class="ai-analysis-container">
+        // Check the initial toggle state
+        const aiToggle = document.getElementById('aiToggle');
+        const shouldShowAI = aiToggle ? aiToggle.checked : true;
+        
+        // When signed in: show loading state only if toggle is on
+        const analysisContainer = document.createElement("div");
+        analysisContainer.className = "ai-analysis-container";
+        analysisContainer.style.display = shouldShowAI ? 'block' : 'none';
+        
+        if (shouldShowAI) {
+            analysisContainer.innerHTML = `
                 <div id="aiLoadingContainer" class="ai-results-container loading">
                     <div class="loading-spinner"></div>
                     <div class="loading-text">Analyzing with AI...</div>
                 </div>
-            </div>
-        `;
-        // Auto-start the AI analysis after a short delay
-        setTimeout(() => {
-            handleAIClick();
-        }, 500);
-    } else {
+            `;
+            
+            // Auto-start the AI analysis after a short delay
+            setTimeout(() => {
+                handleAIClick();
+            }, 500);
+        }
+
+        aiSection.appendChild(analysisContainer);
+        } else {
         // When not signed in: display structured placeholders with selective blur
         aiSection.innerHTML = `
             <h2 class="title subtitle">AI Analysis</h2>

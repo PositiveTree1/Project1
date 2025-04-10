@@ -80,6 +80,9 @@ function updateSignInStatus() {
         if (signInButtonContainer) signInButtonContainer.style.display = 'block';
         if (userDropdown) userDropdown.style.display = 'none';
     }
+    
+    // Dispatch event for toggle button visibility
+    document.dispatchEvent(new Event('authChange'));
 }
 
 function checkAuthStatus() {
@@ -105,9 +108,12 @@ function initializeAllGoogleSignins() {
         const mainButton = document.getElementById('googleSignInButton');
         if (mainButton) {
             google.accounts.id.renderButton(mainButton, {
-                theme: "outline",
-                size: "medium",
-                width: "220"
+                theme: "outline",        // valid values: "outline", "filled_blue", "filled_black"
+                size: "medium",              // "small", "medium", "large"
+                text: "signin",       // "signin_with", "signup_with", "continue_with", "signin"
+                shape: "pill",               // "rectangular", "pill", "circle", "square"
+                logo_alignment: "left",    // "left", "center"
+                width: 100                   // set to a pixel value (integer only)
             });
         }
 
@@ -125,7 +131,7 @@ function initializeAllGoogleSignins() {
                 google.accounts.id.renderButton(button, {
                     theme: "filled_blue",
                     size: "medium",
-                    width: "220"
+                    width: "110"
                 });
             }
         });

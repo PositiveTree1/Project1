@@ -12,8 +12,8 @@
   <div class="analysis-header">
     <a href="index.html" class="logo-link">
       <div class="logo">
-        <img src="assets/Logo6.png" alt="WhatsApp AI Analyzer">
-        <span>ConvoClarity</span>
+        <img src="assets/chatPhantom.png" alt="WhatsApp AI Analyzer">
+        <span>ChatPhantom</span>
       </div>
     </a>    
     <div class="auth-container">
@@ -57,58 +57,80 @@
           <span id="fileName"></span>
           <button class="clear-file" id="clearFile">✕</button>
         </div>
-        
+
         <div class="action-buttons">
           <button id="processButton" class="cta-button process-button" disabled>Analyze Chat</button>
         </div>
         
-        <div class="security-notice">
-          <div class="security-icon">🔒</div>
-          <p>Your data is processed securely and never stored permanently</p>
+        <!-- New Options Container -->
+        <div class="options-container">
+          <!-- AI Toggle -->
+          <div id="aiToggleContainer" class="option-group ai-toggle-container">
+            <span class="option-label">AI Analysis</span>
+            <label class="ai-toggle-button">
+              <input type="checkbox" id="aiToggle" checked>
+              <span class="slider">
+                <span class="text on">ON</span>
+                <span class="text off">OFF</span>
+              </span>
+            </label>
+          </div>
+          
+          <!-- Date Format Selector -->
+          <div class="option-group">
+            
+            <div class="custom-select">
+              <select id="regionSelect">
+                <option value="EU">EU (DD/MM/YYYY)</option>
+                <option value="US">US (MM/DD/YYYY)</option>
+              </select>
+              <div class="select-arrow">▼</div>
+            </div>
+          </div>
+          
+          <!-- Guide Button -->
+          <div class="option-group guide-option">
+            <button class="guide-toggle">
+              <span class="guide-icon">?</span>
+              <span>How to?</span>
+            </button>
+          </div>
         </div>
         
-        <div class="format-selector">
-          <label for="regionSelect">Date Format:</label>
-          <select id="regionSelect">
-            <option value="EU">European (DD/MM/YYYY)</option>
-            <option value="US">American (MM/DD/YYYY)</option>
-          </select>
-        </div>
-
-        <div class="upload-guide">
-          <button class="guide-toggle">How to Export</button>
-          <div class="guide-content">
-            <div class="guide-step">
-              <div class="step-number">1</div>
-              <div class="step-content">
-                <h3>Open the WhatsApp chat you want to analyze</h3>
-                <p>Go to the individual or group chat in WhatsApp</p>
-              </div>
+        
+        
+        <!-- Guide Content -->
+        <div class="guide-content">
+          <div class="guide-step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <h3>Open the WhatsApp chat you want to analyze</h3>
+              <p>Go to the individual or group chat in WhatsApp</p>
             </div>
-            <div class="guide-step">
-              <div class="step-number">2</div>
-              <div class="step-content">
-                <h3>Export the chat</h3>
-                <p>Tap ⋮ (Android) or the chat name (iOS) > More > Export chat</p>
-              </div>
+          </div>
+          <div class="guide-step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <h3>Export the chat</h3>
+              <p>Tap ⋮ (Android) or the chat name (iOS) > More > Export chat</p>
             </div>
-            <div class="guide-step">
-              <div class="step-number">3</div>
-              <div class="step-content">
-                <h3>Choose to export without media</h3>
-                <p>Select "Without Media" to get a smaller file</p>
-              </div>
+          </div>
+          <div class="guide-step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <h3>Choose to export without media</h3>
+              <p>Select "Without Media" to get a smaller file</p>
             </div>
-            <div class="guide-step">
-              <div class="step-number">4</div>
-              <div class="step-content">
-                <h3>Upload the file here</h3>
-                <p>Use the button above to select your exported .txt file</p>
-              </div>
+          </div>
+          <div class="guide-step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+              <h3>Upload the file here</h3>
+              <p>Use the button above to select your exported .txt file</p>
             </div>
-            <div class="guide-note">
-              <p>🔒 Your chat data never leaves your device and isn't stored permanently</p>
-            </div>
+          </div>
+          <div class="guide-note">
+            <p>🔒 Your chat data never leaves your device and isn't stored permanently</p>
           </div>
         </div>
       </div>

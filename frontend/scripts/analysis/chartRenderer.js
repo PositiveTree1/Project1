@@ -548,7 +548,9 @@ function renderCommunalWords(topCommunalWords) {
     communalWordsContainer.innerHTML = ""; // Clear any existing content
 
     // Add the title dynamically
-    communalWordsContainer.insertAdjacentHTML('beforebegin', '<h2 class="title subtitle">Top Words</h2>');
+    if (!document.querySelector('#communalWordsTitle')) {
+        communalWordsContainer.insertAdjacentHTML('beforebegin', '<h2 id="communalWordsTitle" class="title subtitle">Top Words</h2>');
+    }
 
     const communalWordsDiv = document.createElement("div");
     communalWordsDiv.id = "communalWords";
@@ -571,8 +573,9 @@ function renderFloatingEmojis(topCommunalEmojis) {
     floatingEmojisContainer.innerHTML = "";
     
     // Add title
-    floatingEmojisContainer.insertAdjacentHTML('beforebegin', '<h2 class="title subtitle">Top Emojis</h2>');
-
+    if (!document.querySelector('#floatingEmojisTitle')) {
+        floatingEmojisContainer.insertAdjacentHTML('beforebegin', '<h2 id="floatingEmojisTitle" class="title subtitle">Top Emojis</h2>');
+    }
     // Create grid
     const gridContainer = document.createElement("div");
     gridContainer.id = "emojiGrid";
@@ -704,50 +707,13 @@ function renderConversationAnalysis(conversationStarts, conversationEnds) {
 
 function renderPersonSelectionPanel(people) {
     // Save the full list globally
+    const container = document.getElementById('personSelectionContainer');
+    if (container) {
+        container.remove();
+    }
+    
+    // Still save the people list globally in case other functions need it
     window.allPeople = people;
-
-    // If there are only two people, skip rendering the person selector
-    if (people.length <= 2) {
-        return; // Do not render the person selector
-    }
-
-    // Get or create the container for the person selector
-    let container = document.getElementById('personSelectionContainer');
-    if (!container) {
-        container = document.createElement("div");
-        container.id = "personSelectionContainer";
-        container.style.textAlign = "center";
-        container.style.marginBottom = "20px";
-        // Insert the container at the very top of the analytics section
-        const analyticsSection = document.getElementById("chatAnalyticsSection");
-        analyticsSection.insertAdjacentElement("afterbegin", container);
-    }
-    // Clear existing content and add a prominent label
-    container.innerHTML = "<p class='selector-label'>Select people to analyze:</p>";
-
-    // Create checkboxes for each person (without color pickers)
-    people.forEach((person, index) => {
-        const label = document.createElement("label");
-        label.className = "person-selector-label";
-
-        // Create checkbox input
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.value = person;
-        checkbox.checked = true; // Default: selected
-        label.appendChild(checkbox);
-
-        // Add the person's name
-        label.appendChild(document.createTextNode(" " + person));
-        container.appendChild(label);
-    });
-
-    // Add a "Go!" button below the checkboxes
-    const goButton = document.createElement("button");
-    goButton.id = "applySelectionButton";
-    goButton.textContent = "Go!";
-    goButton.addEventListener("click", updateSelectedPeople);
-    container.appendChild(goButton);
 }
   
 function updateSelectedPeople() {
@@ -1430,16 +1396,28 @@ function renderConvoStats() {
     // Display frequency and percentage change.
     const freq = document.createElement("p");
     freq.className = "convo-stat";
-
+    
     const changeValue = window.convoStats.freqPercentageChange;
-
-    if (changeValue > 0) {
-        freq.innerHTML = `Conversations in the past 30 days: <span class="trend-value trend-up">▲${Math.abs(changeValue)}%</span>`;
-    } else if (changeValue < 0) {
-        freq.innerHTML = `Conversations in the past 30 days: <span class="trend-value trend-down">▼${Math.abs(changeValue)}%</span>`;
-    } else {
-        freq.innerHTML = `Conversations in the past 30 days: <span class="trend-value trend-neutral">▲0%</span>`;
+    const last30 = window.convoStats.frequencyLast30;
+    const prev30 = window.convoStats.frequencyPrev30;
+    
+    switch(window.convoStats.trend) {
+        case "up":
+            freq.innerHTML = `Conversations in past 30 days: <span class="trend-value trend-up">▲${Math.abs(changeValue)}% increase</span>`;
+            break;
+        case "down":
+            freq.innerHTML = `Conversations in past 30 days: <span class="trend-value trend-down">▼${Math.abs(changeValue)}% decrease</span>`;
+            break;
+        case "equal":
+            freq.innerHTML = `Conversations in past 30 days: <span class="trend-value trend-neutral">0% change</span> (${last30} vs ${prev30})`;
+            break;
+        case "none":
+            freq.textContent = "No recent conversations";
+            break;
+        default:
+            freq.textContent = `Conversation frequency: ${last30} in last 30 days`;
     }
+    
     statsContainer.appendChild(freq);
 }
 

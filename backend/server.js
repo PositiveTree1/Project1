@@ -18,7 +18,7 @@ const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));
 
 // API Routes
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyDP6zuw7hLitN7Vj1RwReRsvSSCWdT9hYE');
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyBHqaEt5hYdEc1oErBctkz7ygjenOgL5Hk');
 const modelConfig = {
     model: "gemini-1.5-flash",
     generationConfig: {
