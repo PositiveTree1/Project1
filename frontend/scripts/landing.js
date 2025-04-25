@@ -17,3 +17,4 @@ function startTextRotation() {
       textItems[currentIndex].classList.add('active');
   }, 3000); // Change every 3 seconds
 }
+

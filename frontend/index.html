@@ -4,19 +4,27 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WhatsApp AI Analyzer | Understand Your Chats</title>
-  <link rel="stylesheet" href="styles/landing.css">
+  <!-- In analyze.html and index.html -->
+<link rel="stylesheet" href="styles/navbar.css">
+<link rel="stylesheet" href="styles/landing.css"> <!-- or landing.css -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
-<body>
+<body class="index-page">
   <!-- Navigation Bar -->
-  <nav class="navbar">
-    <div class="container">
-      <div class="logo">
-        <img src="assets/chatPhantom.png" alt="WhatsApp AI Analyzer">
-        <span>chatPhantom.com</span>
-      </div>
+  <div class="navbar">
+    <div class="navbar-container">
+      <a href="index.html" class="logo-link">
+        <div class="logo">
+          <img src="assets/chatPhantom.png" alt="WhatsApp AI Analyzer">
+          <span class="logo-text">chatphantom</span>
+        </div>
+      </a>    
       <div class="auth-container">
+        <div class="credits-display">
+          <img src="assets/credit5.png" alt="Credits" class="credit-icon">
+          <span id="creditCount">0</span>
+        </div>
         <div id="gSignInWrapper">
           <div id="googleSignInButton" class="g-signin2"></div>
           <div class="user-dropdown">
@@ -24,6 +32,7 @@
             <div class="dropdown-menu">
               <a href="analyze.html" class="dropdown-item">Analysis</a>
               <a href="dashboard.html" class="dropdown-item">Dashboard</a>
+              <a href="#" class="dropdown-item">Credits</a>
               <div class="dropdown-divider"></div>
               <button id="logoutButton" class="dropdown-item">Sign Out</button>
             </div>
@@ -31,7 +40,7 @@
         </div>
       </div>
     </div>
-  </nav>
+  </div>
 
   <!-- Hero Section -->
   <section class="hero">

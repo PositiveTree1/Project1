@@ -16,6 +16,14 @@ function parseJwt(token) {
     }
 }
 
+function updateCreditDisplay() {
+    const creditCountElement = document.getElementById('creditCount');
+    if (creditCountElement) {
+        const credits = localStorage.getItem('userCredits') || '0';
+        creditCountElement.textContent = credits;
+    }
+}
+
 function setupUserDropdown() {
     const userAvatar = document.getElementById('userAvatar');
     const dropdownMenu = document.querySelector('.dropdown-menu');
@@ -55,6 +63,12 @@ function handleCredentialResponse(response) {
         localStorage.setItem('user', JSON.stringify(userInfo));
         localStorage.setItem('isLoggedIn', 'true');
         
+        // Initialize credits if not already set
+        if (!localStorage.getItem('userCredits')) {
+            localStorage.setItem('userCredits', '5'); // Give 5 free credits
+        }
+        
+        updateCreditDisplay();
         // Redirect to index.html after successful sign-in
         window.location.href = 'dashboard.html';
     } catch (error) {
@@ -65,6 +79,7 @@ function handleCredentialResponse(response) {
 function updateSignInStatus() {
     const signInButtonContainer = document.getElementById('googleSignInButton');
     const userDropdown = document.querySelector('.user-dropdown');
+    const creditsDisplay = document.querySelector('.credits-display');
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
 
     if (isLoggedIn) {
@@ -73,12 +88,16 @@ function updateSignInStatus() {
         
         if (signInButtonContainer) signInButtonContainer.style.display = 'none';
         if (userDropdown) userDropdown.style.display = 'flex';
+        if (creditsDisplay) creditsDisplay.style.display = 'flex';
         if (userAvatar && user?.picture) {
             userAvatar.src = user.picture;
         }
+        
+        updateCreditDisplay();
     } else {
         if (signInButtonContainer) signInButtonContainer.style.display = 'block';
         if (userDropdown) userDropdown.style.display = 'none';
+        if (creditsDisplay) creditsDisplay.style.display = 'none';
     }
     
     // Dispatch event for toggle button visibility
@@ -112,8 +131,8 @@ function initializeAllGoogleSignins() {
                 size: "medium",              // "small", "medium", "large"
                 text: "signin",       // "signin_with", "signup_with", "continue_with", "signin"
                 shape: "pill",               // "rectangular", "pill", "circle", "square"
-                logo_alignment: "left",    // "left", "center"
-                width: 100                   // set to a pixel value (integer only)
+                logo_alignment: "right",    // "left", "center"
+                width: 100                 // set to a pixel value (integer only)
             });
         }
 
@@ -122,7 +141,9 @@ function initializeAllGoogleSignins() {
             'aiSigninButton',
             'aiSigninButton1',
             'aiSigninButton2',
-            'aiSigninButton3'
+            'aiSigninButton3',
+            'aiSigninButton4',
+            'aiSigninButton5',
         ];
 
         aiButtons.forEach(id => {
@@ -140,12 +161,10 @@ function initializeAllGoogleSignins() {
 
 // Initialize auth on all pages
 document.addEventListener('DOMContentLoaded', () => {
-    // Replace the existing initialization with:
     initializeAllGoogleSignins();
-    
-    // Keep the rest the same
     setupUserDropdown();
     updateSignInStatus();
+    updateCreditDisplay(); // Add this line
     
     if (window.location.pathname.includes('dashboard.html')) {
         checkAuthStatus();

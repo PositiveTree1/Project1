@@ -1,6 +1,6 @@
 import stopWords from '../../words/stopWords.js'; // Import the stop words list
 import swearWords from '../../words/words.js'; // Import the swear words list
-import { preprocessChatForAI, analyzeWithAI } from '../../aiProcessor.js';
+import { preprocessChatForAI, analyzeWithAI , preprocessGroupChat, analyzeGroupChatWithAI} from '../../aiProcessor.js';
 
 let selectedFile = null;
 
@@ -180,9 +180,16 @@ function processChatLogFile(text, region) {
                 window.aiAnalysis = renderAIAnalysisSection();
                 
                 if (window.aiAnalysis?.button) {
-                    // Remove any existing listener to prevent duplicates
                     window.aiAnalysis.button.removeEventListener('click', handleAIClick);
                     window.aiAnalysis.button.addEventListener('click', handleAIClick);
+                }
+            } else if (people.length > 2) {
+                // New group chat AI analysis
+                window.aiAnalysis = renderGroupChatAIAnalysisSection();
+                
+                if (window.aiAnalysis?.button) {
+                    window.aiAnalysis.button.removeEventListener('click', handleGroupAIClick);
+                    window.aiAnalysis.button.addEventListener('click', handleGroupAIClick);
                 }
             }
 
@@ -242,9 +249,16 @@ function processChatLogFile(text, region) {
             window.aiAnalysis = renderAIAnalysisSection();
             
             if (window.aiAnalysis?.button) {
-                // Remove any existing listener to prevent duplicates
                 window.aiAnalysis.button.removeEventListener('click', handleAIClick);
                 window.aiAnalysis.button.addEventListener('click', handleAIClick);
+            }
+        } else if (people.length > 2) {
+            // New group chat AI analysis
+            window.aiAnalysis = renderGroupChatAIAnalysisSection();
+            
+            if (window.aiAnalysis?.button) {
+                window.aiAnalysis.button.removeEventListener('click', handleGroupAIClick);
+                window.aiAnalysis.button.addEventListener('click', handleGroupAIClick);
             }
         }
 
@@ -1440,11 +1454,17 @@ function displayAIResults(data, originalNames) {
     if (loadingContainer) {
       loadingContainer.remove();
     }
+
+    // Insert the new title (with gradient text) at the top of aiSection
+    const titleEl = document.createElement("h2");
+    titleEl.className = "title gradient-text";
+    titleEl.textContent = "AI Analysis";
+    aiSection.insertBefore(titleEl, aiSection.firstChild);
   
     // Remove any existing analysis results from a previous run
     const oldResults = aiSection.querySelectorAll(".analysis-result");
     oldResults.forEach(el => el.remove());
-  
+    
     // Create Overall Analysis container (Overall Connection and Evolution)
     const overallContainer = document.createElement("div");
     overallContainer.className = "ai-results-container analysis-result";
@@ -1460,6 +1480,19 @@ function displayAIResults(data, originalNames) {
         </div>
     `;
     aiSection.appendChild(overallContainer);
+
+    // Add Chat Overview section if available
+    if (data.chatOverview?.description) {
+        const chatOverviewContainer = document.createElement("div");
+        chatOverviewContainer.className = "ai-results-container analysis-result";
+        chatOverviewContainer.innerHTML = `
+            <div class="ai-section">
+                <h3>Chat Overview</h3>
+                <p>${data.chatOverview.description}</p>
+            </div>
+        `;
+        aiSection.appendChild(chatOverviewContainer);
+    }
   
     // Handle Response Analysis - more robust version
     try {
@@ -1467,47 +1500,38 @@ function displayAIResults(data, originalNames) {
             const responseContainer = document.createElement("div");
             responseContainer.className = "ai-results-container analysis-result";
             
-            // Get participant names (use original names as fallback)
-            const nameA = originalNames?.personA || (data.participants?.[0]?.name || "Participant 1");
-            const nameB = originalNames?.personB || (data.participants?.[1]?.name || "Participant 2");
+            let responseHTML = `<div class="ai-section">
+                <h3>Response Analysis</h3>`;
             
-            // Safely get response explanations with multiple fallback options
-            let explanationA = '';
-            let explanationB = '';
+            // Try to get response analysis from multiple possible locations
+            const getResponseAnalysis = (participantIndex) => {
+                return data.responseAnalysis?.[`participant${participantIndex === 0 ? 'A' : 'B'}`]?.explanation ||
+                       data.participants?.[participantIndex]?.responseAnalysis?.explanation ||
+                       data.participants?.[participantIndex]?.responsePattern ||
+                       'No response analysis available';
+            };
             
-            // First try to get from responseAnalysis object
-            if (data.responseAnalysis) {
-                explanationA = data.responseAnalysis.participantA?.explanation || 
-                             data.responseAnalysis[nameA]?.explanation || 
-                             data.responseAnalysis[0]?.explanation || 
-                             'No analysis available';
-                explanationB = data.responseAnalysis.participantB?.explanation || 
-                             data.responseAnalysis[nameB]?.explanation || 
-                             data.responseAnalysis[1]?.explanation || 
-                             'No analysis available';
+            if (data.participants?.length >= 2) {
+                const nameA = originalNames?.personA || data.participants[0]?.name || "Participant 1";
+                const nameB = originalNames?.personB || data.participants[1]?.name || "Participant 2";
+                
+                responseHTML += `
+                    <p><strong>${nameA}:</strong> ${getResponseAnalysis(0)}</p>
+                    <p><strong>${nameB}:</strong> ${getResponseAnalysis(1)}</p>
+                `;
+            } else if (data.responseAnalysis) {
+                // Fallback to any response analysis format
+                for (const key in data.responseAnalysis) {
+                    if (typeof data.responseAnalysis[key] === 'object') {
+                        responseHTML += `<p><strong>${key}:</strong> ${data.responseAnalysis[key]?.explanation || 'No details'}</p>`;
+                    } else if (typeof data.responseAnalysis[key] === 'string') {
+                        responseHTML += `<p>${data.responseAnalysis[key]}</p>`;
+                    }
+                }
             }
             
-            // If still not found, try participants array
-            if ((!explanationA || !explanationB) && data.participants?.length >= 2) {
-                explanationA = data.participants[0]?.responsePattern || 
-                             data.participants[0]?.responseAnalysis?.explanation || 
-                             explanationA;
-                explanationB = data.participants[1]?.responsePattern || 
-                             data.participants[1]?.responseAnalysis?.explanation || 
-                             explanationB;
-            }
-            
-            // Final fallback if still empty
-            if (!explanationA) explanationA = 'No analysis available';
-            if (!explanationB) explanationB = 'No analysis available';
-            
-            responseContainer.innerHTML = `
-                <h3 class="title subtitle">Response Analysis</h3>
-                <div class="ai-content">
-                    <p><strong>${nameA}:</strong> ${explanationA}</p>
-                    <p><strong>${nameB}:</strong> ${explanationB}</p>
-                </div>
-            `;
+            responseHTML += '</div>';
+            responseContainer.innerHTML = responseHTML;
             aiSection.appendChild(responseContainer);
         }
     } catch (error) {
@@ -1598,17 +1622,35 @@ function showAnalysisCompletedPopup() {
     popup.className = "ai-popup";
     popup.innerHTML = `
         <div class="ai-popup-content">
-            <button class="close-popup" onclick="this.parentElement.parentElement.remove()">×</button>
-            <h2>AI Analysis Completed</h2>
-            <p>Your chat analysis is now available.</p>
+            <div class="ai-popup-progress">
+                <div class="ai-popup-progress-bar"></div>
+            </div>
+            <div class="ai-popup-header">
+                <h3 class="ai-popup-title">AI Analysis Completed</h3>
+                <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
+            </div>
+            <p class="ai-popup-message">Your chat analysis is now available.</p>
+            <div class="ai-popup-footer">
+                <a href="#ai-results-container" class="ai-popup-button">View Results</a>
+            </div>
         </div>
     `;
+    
     document.body.appendChild(popup);
+    
+    // Remove the popup after animation completes
     setTimeout(() => {
         if (popup.parentElement) {
             popup.parentElement.removeChild(popup);
         }
     }, 3000);
+    
+    // Also remove when clicking outside
+    popup.addEventListener('click', (e) => {
+        if (e.target === popup) {
+            popup.remove();
+        }
+    });
 }
 
 
@@ -1783,7 +1825,7 @@ function renderAIAnalysisSection() {
         } else {
         // When not signed in: display structured placeholders with selective blur
         aiSection.innerHTML = `
-            <h2 class="title subtitle">AI Analysis</h2>
+            <h2 class="title gradient-text">Deep AI</h2>
             <div class="ai-analysis-container">
                 <!-- Overall Connection Placeholder -->
                 <div class="ai-results-container placeholder">
@@ -1939,6 +1981,25 @@ function renderAIAnalysisSection() {
                         </div>
                     </div>
                 </div>
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3 class="title subtitle">Chat Overview</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <div class="ai-content">
+                                    <p>Integer tempus ligula sit amet mauris ullamcorper, et accumsan odio ornare. Curabitur eleifend odio quis velit congue fermentum. urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p  urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p  urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p  urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p                                     
+                                     </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton4" class="g-signin2"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -1954,4 +2015,271 @@ function renderAIAnalysisSection() {
     const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
     (chatAnalyticsSection || document.body).appendChild(aiSection);
     return aiSection;
+}
+
+// New function to render group chat AI section
+function renderGroupChatAIAnalysisSection() {
+    // Remove any existing AI Analysis section if present
+    let existingSection = document.getElementById("aiAnalysisSection");
+    if (existingSection) existingSection.remove();
+    
+    // Create a new container for the AI analysis section
+    const aiSection = document.createElement("div");
+    aiSection.id = "aiAnalysisSection";
+    aiSection.className = "ai-analysis-section";
+    
+    // Add the "Deep AI" title with gradient text style
+    const deepAITitle = document.createElement("h2");
+    deepAITitle.className = "title gradient-text";
+    deepAITitle.textContent = "Deep AI";
+    aiSection.appendChild(deepAITitle);
+    
+    // Check if user is logged in
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    
+    if (isLoggedIn) {
+        // Check the initial toggle state
+        const aiToggle = document.getElementById('aiToggle');
+        const shouldShowAI = aiToggle ? aiToggle.checked : true;
+        
+        // Create the gradient container
+        const gradientContainer = document.createElement("div");
+        gradientContainer.className = "gradient-border-container";
+        
+        // When signed in: show loading state only if toggle is on
+        const analysisContainer = document.createElement("div");
+        analysisContainer.className = "ai-analysis-container";
+        analysisContainer.style.display = shouldShowAI ? 'block' : 'none';
+        
+        if (shouldShowAI) {
+            analysisContainer.innerHTML = `
+                <div id="aiLoadingContainer" class="ai-results-container loading">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Analyzing Group Chat with AI...</div>
+                </div>
+            `;
+            
+            // Auto-start the AI analysis after a short delay
+            setTimeout(() => {
+                handleGroupAIClick();
+            }, 500);
+        }
+
+        gradientContainer.appendChild(analysisContainer);
+        aiSection.appendChild(gradientContainer);
+    } else {
+        // When not signed in: display placeholder with gradient border
+        const gradientContainer = document.createElement("div");
+        gradientContainer.className = "gradient-border-container";
+        
+        gradientContainer.innerHTML = `
+            
+            <div class="ai-analysis-container">
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Group Dynamics</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Amet consectetur adipiscing elit quisque faucibus ex sapien. Quisque faucibus ex sapien vitae pellentesque sem placerat. Vitae pellentesque sem placerat in id cursus mi.</p>
+                            </div>
+                        </div>
+                        <h3>Conversation Themes</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Consectetur adipiscing elit quisque
+                                -  faucibus ex sapien vitae. Ex sapien vitae pellentesque sem placerat in id.
+                                -  Placerat in i</p>
+                            </div>
+                        </div>
+                        <h3>Engagment Analysis</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Consectetur adipiscing elit quisque faucibus ex sapien vitae. Ex sapien vitae pellentesque sem placerat in id. Placerat in id cursus mi pretium tellus duis. Pretium tellus duis convallis tempus leo eu aenean.</p>
+                            </div>
+                        </div>
+                        <h3>Group Personality</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Sit amet consectetur adipiscing elit quisque faucibus ex. Adipiscing elit quisque faucibus ex sapien vitae pellentesque.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton5" class="g-signin2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        aiSection.appendChild(gradientContainer);
+    }
+    
+    // Append the AI analysis section to the designated container
+    const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
+    (chatAnalyticsSection || document.body).appendChild(aiSection);
+    return aiSection;
+}
+
+// New handler for group chat AI analysis
+async function handleGroupAIClick() {
+    // Check again for sign-in status before proceeding
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    if (!isLoggedIn) {
+      return;
+    }
+
+    const aiToggle = document.getElementById('aiToggle');
+    if (aiToggle && !aiToggle.checked) {
+        const aiLoadingContainer = document.getElementById('aiLoadingContainer');
+        if (aiLoadingContainer) {
+            aiLoadingContainer.remove();
+        }
+        return;
+    }
+  
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput.files.length === 0) {
+      alert('Please select a file first.');
+      return;
+    }
+  
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+  
+    reader.onload = async (event) => {
+      try {
+        let text;
+        if (file.name.endsWith('.zip')) {
+          const arrayBuffer = event.target.result;
+          const zip = await JSZip.loadAsync(arrayBuffer);
+          const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
+          if (!txtFile) throw new Error('No .txt file in ZIP');
+          text = await zip.files[txtFile].async('text');
+        } else {
+          text = event.target.result;
+        }
+  
+        if (typeof text !== 'string') {
+          throw new Error('Failed to extract text content');
+        }
+
+        const preprocessed = preprocessGroupChat(text, document.getElementById('regionSelect').value);
+        if (!preprocessed) {
+          alert('Group chat analysis requires 3 or more participants');
+          return;
+        }
+
+        const results = await analyzeGroupChatWithAI(preprocessed.processedText);
+
+        // Add artificial delay for larger files
+        const startTime = Date.now();
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const processingTime = Date.now() - startTime;
+        
+        if (processingTime < 1000) {
+            await new Promise(resolve => setTimeout(resolve, 1000 - processingTime));
+        }
+
+        displayGroupAIResults(results);
+
+        } catch (error) {
+        console.error('Group chat AI analysis failed:', error);
+        const aiSection = document.getElementById("aiAnalysisSection");
+        if (aiSection) {
+            const errorDiv = document.createElement("div");
+            errorDiv.className = "ai-error";
+            errorDiv.innerHTML = `
+                <h3>Analysis Error</h3>
+                <p>${error.message}</p>
+                <p>Full analysis data is available in console.</p>
+            `;
+            aiSection.appendChild(errorDiv);
+        }
+        if (results) console.log("Raw AI Results:", results);
+    }
+    };
+  
+    if (file.name.endsWith('.zip')) {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
+    }
+}
+
+// New function to display group chat results
+function displayGroupAIResults(data) {
+    const aiSection = document.getElementById("aiAnalysisSection");
+    if (!aiSection) return;
+  
+    // Remove loading container if it exists
+    const loadingContainer = document.getElementById("aiLoadingContainer");
+    if (loadingContainer) {
+      loadingContainer.remove();
+    }
+  
+    // Remove any existing analysis results from a previous run
+    const oldResults = aiSection.querySelectorAll(".analysis-result");
+    oldResults.forEach(el => el.remove());
+  
+    // Get the gradient container or create it if it doesn't exist
+    let gradientContainer = aiSection.querySelector(".gradient-border-container");
+    if (!gradientContainer) {
+        gradientContainer = document.createElement("div");
+        gradientContainer.className = "gradient-border-container";
+        aiSection.appendChild(gradientContainer);
+    }
+    
+    // Create container for the group analysis with the same style as 2-person analysis
+    const groupContainer = document.createElement("div");
+    groupContainer.className = "ai-results-container analysis-result";
+    
+    let htmlContent = '<h2 class="title subtitle">Group Chat Analysis</h2>';
+    
+    // Add Group Dynamics
+    htmlContent += `
+        <div class="ai-section">
+            <h3>Group Dynamics</h3>
+            <p>${data.groupDynamics || 'No group dynamics analysis available'}</p>
+        </div>
+    `;
+    
+    // Add Conversation Themes
+    if (data.conversationThemes?.length > 0) {
+        htmlContent += `
+            <div class="ai-section">
+                <h3>Conversation Themes</h3>
+                <ul class="group-themes">
+                    ${data.conversationThemes.map(theme => `<li>${theme}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+    
+    // Add Engagement Analysis
+    htmlContent += `
+        <div class="ai-section">
+            <h3>Engagement Analysis</h3>
+            <p>${data.engagementAnalysis || 'No engagement analysis available'}</p>
+        </div>
+    `;
+    
+    // Add Group Personality
+    htmlContent += `
+        <div class="ai-section">
+            <h3>Group Personality</h3>
+            <p>${data.groupPersonality || 'No group personality analysis available'}</p>
+        </div>
+    `;
+    
+    groupContainer.innerHTML = htmlContent;
+    
+    // Clear the gradient container and add the new content
+    gradientContainer.innerHTML = '';
+    gradientContainer.appendChild(groupContainer);
+    
+    // Show the analysis completed popup
+    showAnalysisCompletedPopup();
 }

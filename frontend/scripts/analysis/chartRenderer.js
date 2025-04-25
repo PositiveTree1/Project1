@@ -655,18 +655,6 @@ function renderConversationAnalysis(conversationStarts, conversationEnds) {
     }
     startedHTML += '</ul>';
 
-    // Determine who started the most conversations
-    let maxStarter = null;
-    let maxCount = 0;
-    for (const sender in conversationStarts) {
-        if (conversationStarts[sender] > maxCount) {
-            maxCount = conversationStarts[sender];
-            maxStarter = sender;
-        }
-    }
-    if (maxStarter) {
-        startedHTML += `<p class="highlight"><strong>${maxStarter}</strong> is the biggest conversation starter with <strong>${maxCount}</strong> conversations started.</p>`;
-    }
     startedHTML += '</div>';
 
     startedContainer.innerHTML = startedHTML;
@@ -687,18 +675,6 @@ function renderConversationAnalysis(conversationStarts, conversationEnds) {
         }
         endedHTML += '</ul>';
 
-        // Determine who ended the most conversations
-        let maxEnder = null;
-        let maxEndCount = 0;
-        for (const sender in conversationEnds) {
-            if (conversationEnds[sender] > maxEndCount) {
-                maxEndCount = conversationEnds[sender];
-                maxEnder = sender;
-            }
-        }
-        if (maxEnder) {
-            endedHTML += `<p class="highlight"><strong>${maxEnder}</strong> is the biggest conversation ender with <strong>${maxEndCount}</strong> conversations ended.</p>`;
-        }
         endedHTML += '</div>';
 
         endedContainer.innerHTML = endedHTML;

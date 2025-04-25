@@ -1,5 +1,5 @@
 :root {
-    --primary-color: #6a3093;
+    --primary-color: #7b1f92;
     --logo-color: #3b005e;
     --secondary-color: #a044ff;
     --accent-color: #f3e5ff;
@@ -25,13 +25,13 @@
   .terms-container h1 {
     text-align: center;
     font-size: 2.5rem;
-    color: var(--primary-color);
+    color: #333;
     margin-bottom: 1rem;
   }
   
   .terms-container h2 {
     font-size: 1.5rem;
-    color: var(--secondary-color);
+    color: #333;
     margin-top: 2rem;
     margin-bottom: 0.5rem;
   }
