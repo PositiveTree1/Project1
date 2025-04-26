@@ -27,13 +27,6 @@
     padding-top: 80px; /* Matches navbar height */
   }
 
-  .user-avatar {
-    width: 40px; /* Increased from 35px */
-    height: 40px; /* Increased from 35px */
-    border-radius: 50%;
-    border: 3px solid rgb(108, 13, 172);
-    transition: transform 0.2s;
-  }
   
   .top-section {
     background: var(--primary-color2) !important;
@@ -190,18 +183,8 @@
   }
   
   /* Adjust the auth container for the new layout */
-  .auth-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  
-  #gSignInWrapper {
-    display: flex;
-    align-items: center;
-    position: relative;
-  }
-  
+
+
 
 
   .cta-button {

@@ -26,10 +26,26 @@
   }
   
   /* Reset and base styles */
-  .navbar, .analysis-header {
+.analysis-header {
     all: initial;
     font-family: 'Poppins', sans-serif;
   }
+
+  .navbar {
+    font-family: poppins, sans-serif;
+    height: 80px !important;
+    padding: 0 20px !important;
+    box-sizing: border-box;         /* ensure padding counts inside height */
+  }
+
+
+
+.auth-container {
+    margin-right: 12px;
+  }
+  
+
+  
   
   .navbar *, .analysis-header * {
     box-sizing: border-box;
@@ -38,19 +54,20 @@
   }
   
   /* Navbar container */
-  .navbar, .analysis-header {
+  .navbar {
     position: fixed;
     top: 0;
     width: 100%;
-    padding: 1rem 0;
-    background-color: rgba(255, 255, 255, 0.9);
+    height: 60px;                /* ← same height everywhere */
+    padding: 0 20px;             /* only horizontal padding */
+    background: rgba(255,255,255,0.9);
     backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;         /* vertical centering */
     z-index: 1000;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    display: flex;
-    justify-content: center;
   }
+  
   
   .navbar.scrolling {
     position: absolute;
@@ -99,10 +116,15 @@
   .auth-container {
     display: flex;
     align-items: center;
-    gap: 10px;
+    
     position: relative;
   top: -1px; /* Optical alignment */
   }
+
+  .credits-display {
+    margin-right: 16px;
+  }
+  
 
   .navbar-container {
     width: 100%;
@@ -148,18 +170,17 @@
     font-family: 'Poppins', sans-serif;
     position: relative;
     top: 1px; /* Perfect vertical alignment */
-    margin-right: 12px; /* Consistent spacing */
     will-change: transform; /* Prevent layout shifts */
     top: 0;
     left: 0;
     transform: none !important;
   }
 
-  .dashboard-page .credits-display,
-.analysis-page .credits-display {
-  right: 0;
-}
+  body {
+    padding-top: 60px;  /* so your content sits perfectly under the 60px nav */
+  }
   
+
   .credit-icon {
     width: 24px;
     height: 24px;
@@ -180,6 +201,7 @@
     min-width: 40px !important;
     min-height: 40px !important;
     border: 3px solid var(--bright-purple) !important;
+    border-radius: 50%;
   }
   
   .user-avatar:hover {
@@ -262,6 +284,7 @@
   @media (max-width: 768px) {
     .navbar, .analysis-header {
       padding: 0.75rem 0;
+      height: 30px;
     }
     
     .logo img {

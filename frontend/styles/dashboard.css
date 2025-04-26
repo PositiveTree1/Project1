@@ -11,14 +11,6 @@
     --gradient: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
   }
   
-  
-.user-avatar {
-  width: 40px; /* Increased from 35px */
-  height: 40px; /* Increased from 35px */
-  border-radius: 50%;
-  border: 3px solid rgb(108, 13, 172);
-  transition: transform 0.2s;
-}
 
   
   #logoutButton {
@@ -226,14 +218,8 @@
   
   /* Responsive Design */
   @media (max-width: 768px) {
-    .analysis-header {
-      padding: 0.75rem 0;
-    }
+
     
-    
-    .auth-container {
-      margin-right: 1rem;
-    }
     
     .dashboard-container {
       padding: 5rem 1rem 1rem;
