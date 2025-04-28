@@ -1556,4 +1556,3 @@ function renderStreakStats(streakStats) {
     streakDiv.appendChild(infoDiv);
     statsContainer.appendChild(streakDiv);
 }
-

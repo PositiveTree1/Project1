@@ -1,20 +1,21 @@
+// frontend/scripts/landing.js
+import { setupGoogleButton, renderAuthUI, setupUserDropdown, updateCreditDisplay } from './authCheck.js';
 
-startTextRotation();
-
-// Rotating text animation
 function startTextRotation() {
     const textItems = document.querySelectorAll('.text-item');
-    let currentIndex = 0;
+    if (textItems.length === 0) return;
+    
+    let idx = 0;
+    textItems[idx].classList.add('active');
     
     setInterval(() => {
-      // Fade out current item
-      textItems[currentIndex].classList.remove('active');
-      
-      // Move to next item
-      currentIndex = (currentIndex + 1) % textItems.length;
-      
-      // Fade in next item
-      textItems[currentIndex].classList.add('active');
-  }, 3000); // Change every 3 seconds
+        textItems[idx].classList.remove('active');
+        idx = (idx + 1) % textItems.length;
+        textItems[idx].classList.add('active');
+    }, 3000);
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    startTextRotation();
+    // Auth functions are already initialized in authCheck.js
+});

@@ -26,8 +26,15 @@
     <link rel="stylesheet" href="styles/navbar.css">
     <link rel="stylesheet" href="styles/analysis.css">
   
-    <script type="module" src="/scripts/authCheck.js"></script>
-
+    <!-- 3) Your other scripts (defer ensures DOM + module load order) -->
+    <script>
+      if (window.location.pathname.includes('dashboard.html')) {
+        document.write('<script type="module" src="scripts/dashboard.js"><\/script>');
+      }
+    </script>
+    <script type="module" src="/scripts/api.js"></script>
+<script type="module" src="/scripts/authCheck.js"></script>
+<script type="module" src="/scripts/analysis/chartRenderer.js"></script>
 
 
   </head>
@@ -244,15 +251,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <script type="module" src="scripts/analysis/fileProcessor.js"></script>
-  <script src="scripts/analysis/chartRenderer.js"></script>
-  <script type="module" src="scripts/analysis/parallax.js"></script>
-  <script src="scripts/authCheck.js"></script>
-<script>
-    if (window.location.pathname.includes('dashboard.html')) {
-        document.write('<script src="scripts/dashboard.js"><\/script>');
-    }
-</script>
+  <script type="module" src="/scripts/api.js"></script>
+  <script type="module" src="/scripts/analysis/fileProcessor.js"></script>
+  <script type="module" src="/scripts/analysis/parallax.js"></script>
+  
+
+
+
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const nav = document.querySelector('.navbar');

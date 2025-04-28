@@ -1,7 +1,9 @@
-// scripts/authCheck.js
+// frontend/scripts/authCheck.js
+// Make setupGoogleButton available globally for initGoogleSignIn()
 
-// Shared functions
-function parseJwt(token) {
+
+// Utility functions
+export function parseJwt(token) {
     try {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -16,7 +18,7 @@ function parseJwt(token) {
     }
 }
 
-function updateCreditDisplay() {
+export function updateCreditDisplay() {
     const creditCountElement = document.getElementById('creditCount');
     if (creditCountElement) {
         const credits = localStorage.getItem('userCredits') || '0';
@@ -24,7 +26,34 @@ function updateCreditDisplay() {
     }
 }
 
-function setupUserDropdown() {
+// Auth UI functions
+export function renderAuthUI() {
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    const googleSignInButton = document.getElementById('googleSignInButton');
+    const userDropdown = document.querySelector('.user-dropdown');
+    const creditsDisplay = document.querySelector('.credits-display');
+    const creditCountElement = document.getElementById('creditCount');
+  if (creditCountElement) {
+    // If unset or invalid, default to 5
+    let credits = parseInt(localStorage.getItem('userCredits'), 10);
+    if (isNaN(credits)) credits = 5;
+    creditCountElement.textContent = credits;
+  }
+    if (googleSignInButton) googleSignInButton.classList.toggle('hidden', isLoggedIn);
+    if (userDropdown) userDropdown.classList.toggle('hidden', !isLoggedIn);
+    if (creditsDisplay) creditsDisplay.classList.toggle('hidden', !isLoggedIn);
+
+    if (isLoggedIn) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user.picture) {
+            const userAvatar = document.getElementById('userAvatar');
+            if (userAvatar) userAvatar.src = user.picture;
+        }
+        updateCreditDisplay();
+    }
+}
+
+export function setupUserDropdown() {
     const userAvatar = document.getElementById('userAvatar');
     const dropdownMenu = document.querySelector('.dropdown-menu');
     const logoutButton = document.getElementById('logoutButton');
@@ -35,7 +64,6 @@ function setupUserDropdown() {
             dropdownMenu.classList.toggle('show');
         });
 
-        // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.user-dropdown')) {
                 dropdownMenu.classList.remove('show');
@@ -48,125 +76,136 @@ function setupUserDropdown() {
             localStorage.removeItem('user');
             localStorage.removeItem('isLoggedIn');
             localStorage.removeItem('googleAuthToken');
-            updateSignInStatus();
-            // Close the dropdown
+            renderAuthUI();
             document.querySelector('.dropdown-menu')?.classList.remove('show');
         });
     }
 }
 
-function handleCredentialResponse(response) {
-    console.log("Google Sign-In response received", response);
-    try {
-        const userInfo = parseJwt(response.credential);
-        localStorage.setItem('googleAuthToken', response.credential);
-        localStorage.setItem('user', JSON.stringify(userInfo));
-        localStorage.setItem('isLoggedIn', 'true');
-        
-        // Initialize credits if not already set
-        if (!localStorage.getItem('userCredits')) {
-            localStorage.setItem('userCredits', '5'); // Give 5 free credits
-        }
-        
-        updateCreditDisplay();
-        // Redirect to index.html after successful sign-in
-        window.location.href = 'dashboard.html';
-    } catch (error) {
-        console.error("Error handling credential response:", error);
+// Page protection
+const RESTRICTED = ['/dashboard.html','/credits.html'];
+export function protectPage() {
+    if (localStorage.getItem('isLoggedIn') !== 'true' &&
+        RESTRICTED.some(p => window.location.pathname.endsWith(p))) {
+        window.location.href = 'index.html';
     }
 }
 
-function updateSignInStatus() {
-    const signInButtonContainer = document.getElementById('googleSignInButton');
-    const userDropdown = document.querySelector('.user-dropdown');
-    const creditsDisplay = document.querySelector('.credits-display');
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-
-    if (isLoggedIn) {
-        const user = JSON.parse(localStorage.getItem('user'));
-        const userAvatar = document.getElementById('userAvatar');
-        
-        if (signInButtonContainer) signInButtonContainer.style.display = 'none';
-        if (userDropdown) userDropdown.style.display = 'flex';
-        if (creditsDisplay) creditsDisplay.style.display = 'flex';
-        if (userAvatar && user?.picture) {
-            userAvatar.src = user.picture;
-        }
-        
-        updateCreditDisplay();
-    } else {
-        if (signInButtonContainer) signInButtonContainer.style.display = 'block';
-        if (userDropdown) userDropdown.style.display = 'none';
-        if (creditsDisplay) creditsDisplay.style.display = 'none';
+// Google Sign-In setup
+export function setupGoogleButton() {
+    if (!window.google?.accounts?.id) {
+        console.log('Google API not loaded yet');
+        return;
     }
-    
-    // Dispatch event for toggle button visibility
-    document.dispatchEvent(new Event('authChange'));
-}
 
-function checkAuthStatus() {
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    if (!isLoggedIn) {
-        // Only redirect if we're not already on the analyze page
-        if (!window.location.pathname.includes('analyze.html')) {
-            window.location.href = 'analyze.html';
-        }
-    }
-}
+    // Initialize Google Auth
+    google.accounts.id.initialize({
+        client_id: '969099711725-hldrjpjo3le920chng1ethgbbc71vald.apps.googleusercontent.com',
+        callback: handleCredentialResponse,
+        ux_mode: 'popup'
+    });
 
-function initializeAllGoogleSignins() {
-    if (window.google && google.accounts && google.accounts.id) {
-        google.accounts.id.initialize({
-            client_id: '969099711725-hldrjpjo3le920chng1ethgbbc71vald.apps.googleusercontent.com',
-            callback: handleCredentialResponse,
-            auto_select: false,
-            ux_mode: 'popup'
+    // Render main sign-in button
+    const mainBtn = document.getElementById('googleSignInButton');
+    if (mainBtn) {
+        google.accounts.id.renderButton(mainBtn, {
+            theme: 'outline',
+            size: 'large',
+            text: 'signin',
+            shape: 'pill',
         });
+    }
 
-        // Render main button
-        const mainButton = document.getElementById('googleSignInButton');
-        if (mainButton) {
-            google.accounts.id.renderButton(mainButton, {
-                theme: "outline",        // valid values: "outline", "filled_blue", "filled_black"
-                size: "medium",              // "small", "medium", "large"
-                text: "signin",       // "signin_with", "signup_with", "continue_with", "signin"
-                shape: "pill",               // "rectangular", "pill", "circle", "square"
-                logo_alignment: "right",    // "left", "center"
-                width: 100                 // set to a pixel value (integer only)
+    // Render any AI-trigger buttons
+    const aiIds = [
+        'aiSigninButton','aiSigninButton1','aiSigninButton2',
+        'aiSigninButton3','aiSigninButton4','aiSigninButton5'
+    ];
+    aiIds.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            google.accounts.id.renderButton(btn, {
+                theme: 'filled_blue',
+                size: 'medium',
+                width: 110
             });
         }
-
-        // Render AI container buttons
-        const aiButtons = [
-            'aiSigninButton',
-            'aiSigninButton1',
-            'aiSigninButton2',
-            'aiSigninButton3',
-            'aiSigninButton4',
-            'aiSigninButton5',
-        ];
-
-        aiButtons.forEach(id => {
-            const button = document.getElementById(id);
-            if (button) {
-                google.accounts.id.renderButton(button, {
-                    theme: "filled_blue",
-                    size: "medium",
-                    width: "110"
-                });
-            }
-        });
-    }
+    });
 }
 
-// Initialize auth on all pages
-document.addEventListener('DOMContentLoaded', () => {
-    initializeAllGoogleSignins();
-    setupUserDropdown();
-    updateSignInStatus();
-    updateCreditDisplay(); // Add this line
-    
-    if (window.location.pathname.includes('dashboard.html')) {
-        checkAuthStatus();
+function handleCredentialResponse(resp) {
+    const user = parseJwt(resp.credential);
+    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('isLoggedIn', 'true');
+    localStorage.setItem('googleAuthToken', resp.credential);
+  
+    // Set default credits to 5 if not already set
+    if (!localStorage.getItem('userCredits')) {
+      localStorage.setItem('userCredits', '5');
     }
+  
+    // Fetch initial (or updated) credits, then render + redirect
+    fetch(`/api/user-credits/${user.sub}`)
+      .then(r => r.json())
+      .then(data => {
+        // If user doesn't exist in DB yet, initialize with 5 credits
+        if (data.credits === undefined || data.credits === null) {
+          return fetch('/api/update-credits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              userId: user.sub, 
+              amount: 5 
+            })
+          });
+        } else {
+          // Update local storage with server value
+          localStorage.setItem('userCredits', data.credits);
+          return Promise.resolve();
+        }
+      })
+      .then(() => {
+        renderAuthUI();
+        if (window.location.pathname.includes('index.html')) {
+          window.location.href = 'dashboard.html';
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching credits:', err);
+        renderAuthUI();
+      });
+}
+  
+
+// Credit management
+export async function checkUserCredits(userId) {
+    const res = await fetch(`/api/user-credits/${userId}`);
+    const { credits } = await res.json();
+    localStorage.setItem('userCredits', credits);
+    return credits;
+}
+
+export async function deductCredit(userId, amount = 1) {
+    const res = await fetch('/api/update-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, amount: -amount })
+    });
+    if (res.ok) {
+        const newCount = parseInt(localStorage.getItem('userCredits')||'0') - amount;
+        localStorage.setItem('userCredits', newCount);
+        updateCreditDisplay();
+        return true;
+    }
+    console.error('Failed deduct', await res.text());
+    return false;
+}
+
+window.setupGoogleButton = setupGoogleButton;
+
+document.addEventListener('DOMContentLoaded', () => {
+    renderAuthUI();
+    protectPage();
+    setupUserDropdown();
+    // ← no more setupGoogleButton() here
 });

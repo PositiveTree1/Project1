@@ -1,6 +1,8 @@
 import stopWords from '../../words/stopWords.js'; // Import the stop words list
 import swearWords from '../../words/words.js'; // Import the swear words list
 import { preprocessChatForAI, analyzeWithAI , preprocessGroupChat, analyzeGroupChatWithAI} from '../../aiProcessor.js';
+import { setupGoogleButton } from '../authCheck.js';
+
 
 let selectedFile = null;
 
@@ -2006,7 +2008,7 @@ function renderAIAnalysisSection() {
         // Initialize Google Sign-In buttons after a small delay
         setTimeout(() => {
             if (window.google && google.accounts && google.accounts.id) {
-                initializeAllGoogleSignins();
+                setupGoogleButton();
             }
         }, 100);
     }

@@ -1,0 +1,485 @@
+:root {
+    --primary-color: #6a3093;
+
+    --logo-color: #3b005e;
+    --secondary-color: #a044ff;
+    --secondary-color2: #4451ff;
+    --accent-color: #f3e5ff;
+    --text-color: #333;
+    --light-text: #fff;
+    --background: #fff;
+    --container-background: #efd7ff;
+    --gradient2: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+
+    --gradient: linear-gradient(135deg, #304793, #44abff);
+  }
+
+
+/* credits.css - Updated for new payment options */
+.credits-page {
+    background-color: #f9f5ff;
+    min-height: 100vh;
+  }
+  
+  .credits-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 6rem 2rem 2rem;
+    font-family: 'Poppins', sans-serif;
+  }
+  
+  .credits-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+  
+  .credits-header h1 {
+    color: var(--primary-color);
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .credits-header .subtitle {
+    color: var(--text-color);
+    font-size: 1.1rem;
+    max-width: 600px;
+    margin: 0 auto 2rem;
+  }
+  
+  .current-credits {
+    margin: 2rem 0;
+  }
+  
+  .credits-badge {
+    display: inline-flex;
+    align-items: center;
+    background-color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 50px;
+    box-shadow: 0 4px 12px rgba(106, 48, 147, 0.1);
+  }
+  
+  .credits-badge .credit-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 10px;
+  }
+  
+  .credits-badge span {
+    font-size: 1rem;
+    color: var(--text-color);
+  }
+  
+  .pricing-plans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin: 3rem 0;
+  }
+  
+  .pricing-card {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    position: relative;
+    border: 2px solid transparent;
+  }
+  
+  .pricing-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  }
+  
+  .pricing-card.popular {
+    border-color: var(--secondary-color);
+  }
+
+  .pricing-card.premium {
+    border-color: var(--secondary-color2);
+  }
+  
+  .pricing-card.popular .popular-badge {
+    position: absolute;
+    top: -12px;
+    right: 20px;
+    background: var(--gradient2);
+    color: white;
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .pricing-card.premium .premium-badge {
+    position: absolute;
+    top: -12px;
+    right: 20px;
+    background: var(--gradient);
+    color: white;
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  
+  .pricing-card.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 5px 20px rgba(106, 48, 147, 0.2);
+  }
+  
+  .pricing-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--accent-color);
+  }
+  
+  .pricing-header h3 {
+    color: var(--primary-color);
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
+  }
+  
+  .pricing-header .price {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin: 0.5rem 0;
+  }
+  
+  .pricing-header .credits-amount {
+    font-size: 1.1rem;
+    color: var(--secondary-color);
+    font-weight: 600;
+  }
+  
+  .pricing-features ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 2rem;
+  }
+  
+  .pricing-features li {
+    padding: 0.5rem 0;
+    color: var(--text-color);
+    display: flex;
+    align-items: flex-start;
+  }
+  
+  .pricing-features li:before {
+    content: "✓";
+    color: var(--secondary-color);
+    margin-right: 0.8rem;
+    font-weight: bold;
+  }
+  
+  .pricing-card .cta-button {
+    width: 100%;
+    text-align: center;
+    padding: 0.8rem;
+  }
+  
+  .payment-section {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    margin: 3rem 0;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+    display: none;
+  }
+  
+  .payment-section h2 {
+    color: var(--primary-color);
+    text-align: center;
+    margin-bottom: 2rem;
+    font-size: 1.8rem;
+  }
+  
+  .selected-plan-info {
+    background: var(--accent-color);
+    padding: 1.5rem;
+    border-radius: 10px;
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+  
+  .selected-plan {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  
+  .selected-plan span {
+    font-weight: 600;
+    color: var(--primary-color);
+    font-size: 1.1rem;
+  }
+  
+  .payment-options {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .payment-option {
+    background: white;
+    border: 1px solid var(--accent-color);
+    border-radius: 10px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .payment-method {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .payment-icon {
+    width: 48px;
+    height: 48px;
+    background: #f5f5f5;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .payment-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .payment-details {
+    flex: 1;
+  }
+  
+  .payment-details h3 {
+    margin: 0 0 0.25rem;
+    color: var(--text-color);
+    font-size: 1.1rem;
+  }
+  
+  .payment-details p {
+    margin: 0;
+    color: #666;
+    font-size: 0.9rem;
+  }
+  
+  .accepted-cards {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  
+  .accepted-cards img {
+    height: 24px;
+    width: auto;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+  }
+  
+  .accepted-cards img:hover {
+    opacity: 1;
+  }
+  
+  .payment-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0.5rem 0;
+  }
+  
+  .payment-divider::before,
+  .payment-divider::after {
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid var(--accent-color);
+  }
+  
+  .payment-divider::before {
+    margin-right: 1rem;
+  }
+  
+  .payment-divider::after {
+    margin-left: 1rem;
+  }
+  
+  .payment-option .cta-button {
+    width: 100%;
+    padding: 0.8rem;
+    font-size: 1rem;
+  }
+  
+  .security-assurance {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2rem;
+    color: #666;
+    font-size: 0.9rem;
+  }
+  
+  .security-assurance .security-icon {
+    margin-right: 0.5rem;
+    font-size: 1.2rem;
+  }
+  
+  .credits-faq {
+    max-width: 800px;
+    margin: 3rem auto;
+    padding: 0 2rem;
+  }
+  
+  .credits-faq h2 {
+    font-family: Poppins, sans-serif;
+
+    text-align: center;
+    color: var(--primary-color);
+    margin-bottom: 2rem;
+    font-size: 1.8rem;
+  }
+  
+  .faq-item {
+    font-family: Poppins, sans-serif;
+
+    margin-bottom: 1rem;
+    border: 1px solid var(--accent-color);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  
+  .faq-question {
+    width: 100%;
+    padding: 1rem 1.5rem;
+    background: white;
+    border: none;
+    text-align: left;
+    font-family: 'Poppins', sans-serif;
+    font-size: 1rem;
+    color: var(--text-color);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .faq-question:after {
+    content: "+";
+    font-size: 1.2rem;
+    color: var(--primary-color);
+  }
+  
+  .faq-item.active .faq-question:after {
+    content: "-";
+  }
+  
+  .faq-answer {
+    font-family: Poppins, sans-serif;
+    padding: 0 1.5rem;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    background: white;
+  }
+  
+  .faq-item.active .faq-answer {
+    padding: 0 1.5rem 1.5rem;
+    max-height: 500px;
+  }
+  
+  .faq-answer p {
+    margin: 0;
+    color: var(--text-color);
+    line-height: 1.6;
+  }
+  
+  @media (max-width: 768px) {
+    .credits-container {
+      padding: 5rem 1rem 1rem;
+    }
+    
+    .pricing-plans {
+      grid-template-columns: 1fr;
+    }
+    
+    .selected-plan {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .payment-method {
+      flex-direction: column;
+      text-align: center;
+    }
+    
+    .payment-icon {
+      margin: 0 auto;
+    }
+    
+    .accepted-cards {
+      justify-content: center;
+    }
+  }
+
+  /* Footer Styles */
+.footer {
+    font-family: Poppins, sans-serif;
+    padding: 2rem 0;
+    text-align: center;
+    background: var(--primary-color);
+    color: white;
+  }
+  
+  .extended-footer {
+    padding-top: 3rem;
+    margin-top: 2rem;
+  }
+  
+  .footer-links {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  
+  .footer-links div {
+  
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .footer-links h4 {
+    color: white;
+    font-family: Poppins, sans-serif;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  
+  .footer-links a {
+    font-family: Poppins, sans-serif;
+    color: var(--accent-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+  
+  .footer-links a:hover {
+    color: white;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    
+    
+    min-height: 100vh;
+  }

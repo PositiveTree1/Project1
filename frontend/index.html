@@ -1,46 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="icon" type="image/png" href="assets/chatPhantom.png">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WhatsApp AI Analyzer | Understand Your Chats</title>
   <!-- In analyze.html and index.html -->
 <link rel="stylesheet" href="styles/navbar.css">
 <link rel="stylesheet" href="styles/landing.css"> <!-- or landing.css -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+  function initGoogleSignIn() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        window.setupGoogleButton();
+      });
+    } else {
+      window.setupGoogleButton();
+    }
+  }
+</script>
+
+<!-- 2) GSI client calls our initGoogleSignIn when it's ready -->
+<script
+  src="https://accounts.google.com/gsi/client"
+  async defer
+  onload="initGoogleSignIn()"
+></script>
+
+<!-- 3) authCheck.js defines setupGoogleButton and attaches it to window -->
+<script type="module" src="/scripts/authCheck.js" defer></script>
+
+<!-- 4) Other scripts -->
+<script type="module" src="/scripts/api.js" defer></script>
+<script type="module" src="/scripts/landing.js" defer></script>
 </head>
 <body class="index-page">
   <!-- Navigation Bar -->
-  <div class="navbar">
+  <nav class="navbar">
     <div class="navbar-container">
       <a href="index.html" class="logo-link">
         <div class="logo">
-          <img src="assets/chatPhantom.png" alt="WhatsApp AI Analyzer">
+          <img src="assets/chatPhantom.png" alt="ChatPhantom">
           <span class="logo-text">ChatPhantom</span>
         </div>
-      </a>    
+      </a>
       <div class="auth-container">
-        <div class="credits-display">
-          <img src="assets/credit5.png" alt="Credits" class="credit-icon">
-          <span id="creditCount">0</span>
-        </div>
-        <div id="gSignInWrapper">
-          <div id="googleSignInButton" class="g-signin2"></div>
-          <div class="user-dropdown">
-            <img id="userAvatar" class="user-avatar" src="assets/default-avatar.png" alt="Profile Picture">
-            <div class="dropdown-menu">
-              <a href="analyze.html" class="dropdown-item">Analysis</a>
-              <a href="dashboard.html" class="dropdown-item">Dashboard</a>
-              <a href="#" class="dropdown-item">Credits</a>
-              <div class="dropdown-divider"></div>
-              <button id="logoutButton" class="dropdown-item">Sign Out</button>
-            </div>
+        <!-- hidden by default until renderAuthUI shows them -->
+      <div class="credits-display hidden">
+        <img src="assets/credit5.png" alt="Credits" class="credit-icon">
+        <span id="creditCount">0</span>
+      </div>
+
+      <div id="gSignInWrapper">
+        <!-- Google button is visible until logged in -->
+        <div id="googleSignInButton" class="g-signin2"></div>
+
+        <!-- user-dropdown hidden until logged in -->
+        <div class="user-dropdown hidden">
+          <img id="userAvatar" class="user-avatar" src="assets/default-avatar.png" alt="Profile Picture">
+          <div class="dropdown-menu">
+            <a href="analyze.html" class="dropdown-item">Analysis</a>
+            <a href="dashboard.html" class="dropdown-item">Dashboard</a>
+            <a href="credits.html" class="dropdown-item">Credits</a>
+            <div class="dropdown-divider"></div>
+            <button id="logoutButton" class="dropdown-item">Sign Out</button>
           </div>
         </div>
       </div>
+
+      </div>
     </div>
-  </div>
+  </nav>
 
   <!-- Hero Section -->
   <section class="hero">
@@ -199,12 +229,7 @@
   <!-- Footer -->
   
 
-  <script src="scripts/authCheck.js"></script>
-<script>
-    if (window.location.pathname.includes('dashboard.html')) {
-        document.write('<script src="scripts/dashboard.js"><\/script>');
-    }
-</script>
+
 
 <!-- Stats Section -->
 <section class="stats">

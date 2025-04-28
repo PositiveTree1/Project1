@@ -222,8 +222,6 @@
         setupDragDrop();
         setupGuideToggle();
         updateUploadInterface();
-        setupGoogleSignIn();
-        updateSignInStatus(); // Check login status on page load
     });
 
     window.addEventListener('resize', function() {
