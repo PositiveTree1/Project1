@@ -1,40 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="icon" type="image/png" href="assets/chatPhantom.png">
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WhatsApp AI Analyzer | Understand Your Chats</title>
-  <!-- In analyze.html and index.html -->
-<link rel="stylesheet" href="styles/navbar.css">
-<link rel="stylesheet" href="styles/landing.css"> <!-- or landing.css -->
-<script>
-  function initGoogleSignIn() {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
+    <link rel="icon" type="image/png" href="assets/chatPhantom.png">
+    <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  
+  <title>ChatPhantom | Understand Your Chats</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link rel="stylesheet" href="styles/navbar.css">
+
+    <script>
+    function initGoogleSignIn() {
+        if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.setupGoogleButton();
+        });
+        } else {
         window.setupGoogleButton();
-      });
-    } else {
-      window.setupGoogleButton();
+        }
     }
-  }
-</script>
+    </script>
 
-<!-- 2) GSI client calls our initGoogleSignIn when it's ready -->
-<script
-  src="https://accounts.google.com/gsi/client"
-  async defer
-  onload="initGoogleSignIn()"
-></script>
+    <!-- 2) GSI client calls our initGoogleSignIn when it's ready -->
+    <script
+    src="https://accounts.google.com/gsi/client"
+    async defer
+    onload="initGoogleSignIn()"
+    ></script>
 
-<!-- 3) authCheck.js defines setupGoogleButton and attaches it to window -->
-<script type="module" src="/scripts/authCheck.js" defer></script>
+    <!-- 3) authCheck.js defines setupGoogleButton and attaches it to window -->
+    <script type="module" src="/scripts/authCheck.js"></script>
 
-<!-- 4) Other scripts -->
-<script type="module" src="/scripts/api.js" defer></script>
-<script type="module" src="/scripts/landing.js" defer></script>
+    <!-- 4) Other scripts -->
+    <script type="module" src="/scripts/api.js" defer></script>
+    <script type="module" src="/scripts/landing.js" defer></script>
+
+    <script>
+        tailwind.config={
+            theme:{
+                extend:{
+                    colors:{
+                        primary:'#6a3093',
+                        secondary:'#a044ff',
+                        accent: '#f3e5ff',
+                        textColor: '#333',
+                        lightText: '#fff',
+                        containerBg: 'rgb(239 239 239)',
+                        logoColor: '#3b005e'
+                    },
+                    borderRadius:{
+                        'none':'0px',
+                        'sm':'4px',
+                        DEFAULT:'8px',
+                        'md':'12px',
+                        'lg':'16px',
+                        'xl':'20px',
+                        '2xl':'24px',
+                        '3xl':'32px',
+                        'full':'9999px',
+                        'button':'8px'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css">
+    <style>
+        :where([class^="ri-"])::before { content: "\f3c2"; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: #333;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #6a3093, #a044ff);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #6a3093, #a044ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        input:focus {
+            outline: none;
+        }
+        .step-connector {
+            position: relative;
+        }
+        .step-connector::after {
+            content: '';
+            position: absolute;
+            top: 2.5rem;
+            left: 50%;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, #6a3093, #a044ff);
+            z-index: -1;
+        }
+        .step-connector:last-child::after {
+            display: none;
+        }
+    </style>
 </head>
-<body class="index-page">
+
+<body class="index-page bg-white min-h-screen">
   <!-- Navigation Bar -->
   <nav class="navbar">
     <div class="navbar-container">
@@ -46,10 +117,12 @@
       </a>
       <div class="auth-container">
         <!-- hidden by default until renderAuthUI shows them -->
-      <div class="credits-display hidden">
-        <img src="assets/credit5.png" alt="Credits" class="credit-icon">
-        <span id="creditCount">0</span>
-      </div>
+      <a href="credits.html" class="credits-link">
+        <div class="credits-display hidden" id="creditsContainer">
+          <img src="assets/credit5.png" alt="Credits" class="credit-icon">
+          <span id="creditCount">0</span>
+        </div>
+      </a>
 
       <div id="gSignInWrapper">
         <!-- Google button is visible until logged in -->
@@ -72,290 +145,487 @@
     </div>
   </nav>
 
-  <!-- Hero Section -->
-  <section class="hero">
-    <div class="container">
-      <div class="hero-content">
-        <h1>Unlock Insights from Your Chats with AI</h1>
-        <div class="rotating-text">
-          <span class="text-item active">Analyze relationship dynamics</span>
-          <span class="text-item">Track conversation patterns</span>
-          <span class="text-item">Discover communication styles</span>
-          <span class="text-item">Get AI-powered insights</span>
-          <span class="text-item">Improve your relationship</span>
+    <main class="bg-white min-h-screen">
+    <!-- Hero Section -->
+    <section class="relative overflow-hidden">
+        <div class="absolute inset-0 z-0" style="background-image: url('https://readdy.ai/api/search-image?query=Abstract%20technology%20background%20with%20purple%20gradient%2C%20soft%20flowing%20shapes%2C%20subtle%20data%20visualization%20elements%2C%20clean%20modern%20design%2C%20light%20patterns%20representing%20AI%20and%20data%20analysis%2C%20professional%20look&width=1920&height=1080&seq=1&orientation=landscape'); background-size: cover; background-position: center; opacity: 0.15;"></div>
+        
+        <div class="container mx-auto px-6 py-20 relative z-10">
+            <div class="flex flex-col items-center text-center max-w-4xl mx-auto">
+                <h1 class="text-5xl md:text-6xl font-bold mb-6 gradient-text">Unlock AI Insights From Your Conversations</h1>
+                <p class="text-xl md:text-2xl text-gray-700 mb-10 max-w-3xl">Analyze, understand, and improve your relationships with our powerful analytics platform</p>
+                
+                <div class="flex flex-col sm:flex-row gap-4 mb-16">
+                    <a href="analyze.html" class="gradient-bg text-white font-semibold py-3 px-8 !rounded-button shadow-lg hover:opacity-90 transition-all whitespace-nowrap">Try It Now</a>
+                </div>
+                
+                <div class="w-full max-w-3xl mt-8">
+                    <img src="assets/dashboard.png" alt="AI Chat Analysis Dashboard" class="w-full h-auto rounded-xl shadow-xl">
+                </div>
+            </div>
         </div>
-        <a href="analyze.html" class="cta-button">Try It Yourself</a>
-      </div>
-      <div class="hero-bullets">
-        <div class="bullet-point">
-          <div class="bullet-icon">🔍</div>
-          <p>Deep analysis of your chat history</p>
-        </div>
-        <div class="bullet-point">
-          <div class="bullet-icon">🤖</div>
-          <p>AI-powered relationship insights</p>
-        </div>
-        <div class="bullet-point">
-          <div class="bullet-icon">📱</div>
-          <p>Get relationship tips</p>
-        </div> 
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- Features Section -->
-  <!-- Visual Analysis Showcase Section -->
-<section class="visual-showcase">
-  <div class="container">
-    <h2>See Your Chat Story Unfold</h2>
-    <p class="subtitle">AI-powered visualizations that reveal hidden patterns in your conversations</p>
-    
-    <div class="showcase-container">
-      <!-- Timeline Visualization -->
-      <div class="analysis-card timeline-card">
-        <div class="card-content">
-          <h3>Message Timeline</h3>
-          <p>See your conversation history mapped over time with interactive zooming</p>
-          <a href="analyze.html" class="cta-button">Try It Now</a>
+    <!-- Features Section -->
+    <section class="py-20 bg-white">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Powerful Analysis Features</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">ChatPhantom provides a range of powerful analysis features to view statistics and insights from your conversations</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-accent rounded-lg p-8 transition-all hover:shadow-lg">
+                    <div class="w-16 h-16 mb-6 flex items-center justify-center rounded-full gradient-bg text-white">
+                        <i class="ri-bar-chart-grouped-line ri-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Sentiment Analysis</h3>
+                    <p class="text-gray-700">Understand the emotional tone of your conversations and identify positive or negative patterns in interactions.</p>
+                </div>
+                
+                <!-- Feature 2 -->
+                <div class="bg-accent rounded-lg p-8 transition-all hover:shadow-lg">
+                    <div class="w-16 h-16 mb-6 flex items-center justify-center rounded-full gradient-bg text-white">
+                        <i class="ri-time-line ri-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Response Time Metrics</h3>
+                    <p class="text-gray-700">Track and optimize average response times.</p>
+                </div>
+                
+                <!-- Feature 3 -->
+                <div class="bg-accent rounded-lg p-8 transition-all hover:shadow-lg">
+                    <div class="w-16 h-16 mb-6 flex items-center justify-center rounded-full gradient-bg text-white">
+                        <i class="ri-mind-map-line ri-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Red Flags & Green Flags</h3>
+                    <p class="text-gray-700">View red flags and green flags in your conversations to identify areas for improvement.</p>
+                </div>
+                
+                <!-- Feature 4 -->
+                <div class="bg-accent rounded-lg p-8 transition-all hover:shadow-lg">
+                    <div class="w-16 h-16 mb-6 flex items-center justify-center rounded-full gradient-bg text-white">
+                        <i class="ri-file-text-line ri-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Timelines</h3>
+                    <p class="text-gray-700">View timelines of your conversation across years, months, days and hours</p>
+                </div>
+                
+                <!-- Feature 5 -->
+                <div class="bg-accent rounded-lg p-8 transition-all hover:shadow-lg">
+                    <div class="w-16 h-16 mb-6 flex items-center justify-center rounded-full gradient-bg text-white">
+                        <i class="ri-user-voice-line ri-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Chat focus</h3>
+                    <p class="text-gray-700">View who your conversation is focused on the most</p>
+                </div>
+                
+                <!-- Feature 6 -->
+                <div class="bg-accent rounded-lg p-8 transition-all hover:shadow-lg">
+                    <div class="w-16 h-16 mb-6 flex items-center justify-center rounded-full gradient-bg text-white">
+                        <i class="ri-history-line ri-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Relationship Tips</h3>
+                    <p class="text-gray-700">Get tips on how to connect and improve relationships</p>
+                </div>
+            </div>
         </div>
-        <div class="card-preview">
-          <img src="assets/timeline-preview2.png" alt="Message timeline visualization" class="preview-image">
-        </div>
-      </div>
-      
-      <!-- Word Cloud -->
-      <div class="analysis-card wordcloud-card">
-        <div class="card-content">
-          <h3>Word Cloud</h3>
-          <p>Discover your most frequently used words in a beautiful visual cloud</p>
-          <a href="analyze.html" class="cta-button">Try It Now</a>
-        </div>
-        <div class="card-preview">
-          <img src="assets/wordcloud-preview.png" alt="Word cloud visualization" class="preview-image">
-        </div>
-      </div>
-      
-      <!-- Sentiment Analysis -->
-      <div class="analysis-card sentiment-card">
-        <div class="card-content">
-          <h3>Personal Cards</h3>
-          <p>Discover fun Statistics about yourself and others</p>
-          <a href="analyze.html" class="cta-button">Try It Now</a>
-        </div>
-        <div class="card-preview">
-          <img src="assets/sentiment-preview.png" alt="Sentiment analysis visualization" class="preview-image">
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+    </section>
 
-  <section class="analysis-preview">
-    <div class="container">
-      <h2>See What You'll Discover</h2>
-      <div class="preview-grid">
-        <div class="preview-card">
-          <img src="assets/analysis-screenshot1.png" alt="Message Frequency Analysis">
-          <h3>Message Patterns</h3>
-          <p>See who initiates conversations and response times</p>
-          <a href="analyze.html" class="cta-button secondary">Try Analysis</a>
+    <!-- How It Works -->
+    <section class="py-20 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">Get started with chatPhantom in three simple steps</p>
+            </div>
+            
+            <div class="flex flex-col md:flex-row justify-between items-center max-w-5xl mx-auto">
+                <!-- Step 1 -->
+                <div class="flex flex-col items-center text-center mb-12 md:mb-0 px-4 step-connector md:w-1/3">
+                    <div class="w-16 h-16 mb-6 flex items-center justify-center rounded-full gradient-bg text-white text-2xl font-bold">1</div>
+                    <h3 class="text-xl font-semibold mb-3">Export Your Chat Log</h3>
+                    <p class="text-gray-700">Simply export your chat history from Whatsapp</p>
+                </div>
+                
+                <!-- Step 2 -->
+                <div class="flex flex-col items-center text-center mb-12 md:mb-0 px-4 step-connector md:w-1/3">
+                    <div class="w-16 h-16 mb-6 flex items-center justify-center rounded-full gradient-bg text-white text-2xl font-bold">2</div>
+                    <h3 class="text-xl font-semibold mb-3">Upload the File</h3>
+                    <p class="text-gray-700">Upload the exported file to our platform</p>
+                </div>
+                
+                <!-- Step 3 -->
+                <div class="flex flex-col items-center text-center px-4 md:w-1/3">
+                    <div class="w-16 h-16 mb-6 flex items-center justify-center rounded-full gradient-bg text-white text-2xl font-bold">3</div>
+                    <h3 class="text-xl font-semibold mb-3">Review Insights</h3>
+                    <p class="text-gray-700">Access your personalized dashboard with visualizations and actionable recommendations.</p>
+                </div>
+            </div>
         </div>
-        <div class="preview-card">
-          <img src="assets/analysis-screenshot2.png" alt="Word Cloud Visualization">
-          <h3>Red Flags and Green Flags</h3>
-          <p>See what your main drawbacks are</p>
-          <a href="analyze.html" class="cta-button secondary">Try Analysis</a>
+    </section>
+
+    <!-- Benefits Section -->
+    <section class="py-20 bg-white">
+        <div class="container mx-auto px-6">
+            <div class="flex flex-col lg:flex-row items-center gap-12">
+                <div class="lg:w-1/2">
+                    <h2 class="text-3xl md:text-4xl font-bold mb-8">Why Choose Our Analysis Platform?</h2>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-start">
+                            <div class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full gradient-bg text-white mr-4">
+                                <i class="ri-check-line"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-1">Detailed Analysis</h3>
+                                <p class="text-gray-700">We provide in-depth insights and analysis to help you understand your conversations better.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <div class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full gradient-bg text-white mr-4">
+                                <i class="ri-check-line"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-1">Secure and Private</h3>
+                                <p class="text-gray-700">Your data is always processed securely, with privacy as our top priority.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <div class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full gradient-bg text-white mr-4">
+                                <i class="ri-check-line"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-1">Tips</h3>
+                                <p class="text-gray-700">We provide tips and suggestions to help you improve your conversations and relationships.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                
+            </div>
         </div>
-        <div class="preview-card">
-          <img src="assets/analysis-screenshot3.png" alt="Sentiment Analysis">
-          <h3>Sentiment Trends</h3>
-          <p>Track emotional tone over time</p>
-          <a href="analyze.html" class="cta-button secondary">Try Analysis</a>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="py-20 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">What Our Users Say</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">Hear from people like you that have used chatphantom.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Testimonial 1 -->
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <div class="flex items-center mb-4">
+                        <div class="w-12 h-12 flex-shrink-0 rounded-full overflow-hidden mr-4 bg-primary">
+                            <img src="assets/defaultAvatar.jpg" alt="Emily Richardson" class="w-full h-full object-cover">
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">Emily</h4>
+                        </div>
+                    </div>
+                    <p class="text-gray-700">"I have been using chatphantom to analyze some chats I had with freinds, I found it very useful and easy to use."</p>
+                    <div class="flex mt-4 text-secondary">
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                    </div>
+                </div>
+                
+                <!-- Testimonial 2 -->
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <div class="flex items-center mb-4">
+                        <div class="w-12 h-12 flex-shrink-0 rounded-full overflow-hidden mr-4 bg-primary">
+                            <img src="assets/google1.png" alt="David Chen" class="w-full h-full object-cover">
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">David</h4>
+                        </div>
+                    </div>
+                    <p class="text-gray-700">"Seeing patterns that I wouldn't have noticed without chatphantom really helped me improve my tone."</p>
+                    <div class="flex mt-4 text-secondary">
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                    </div>
+                </div>
+                
+                <!-- Testimonial 3 -->
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <div class="flex items-center mb-4">
+                        <div class="w-12 h-12 flex-shrink-0 rounded-full overflow-hidden mr-4 bg-primary">
+                            <img src="assets/google2.png" alt="Sophia Williams" class="w-full h-full object-cover">
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">Sophia</h4>
+                        </div>
+                    </div>
+                    <p class="text-gray-700">"I noticed that my interactions were always focused on me, I dont think i would have noticed without the AI insights"</p>
+                    <div class="flex mt-4 text-secondary">
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-fill"></i>
+                        <i class="ri-star-half-fill"></i>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- Security Section -->
-  <section class="security">
-    <div class="container">
-      <div class="security-content">
-        <h2>Your Data is Secure</h2>
-        <div class="security-features">
-          <div class="security-feature">
-            <div class="security-icon">🔒</div>
-            <h3>End-to-End Encryption</h3>
-            <p>Your chat data is anonymized during transfer and never stored permanently.</p>
-          </div>
-          <div class="security-feature">
-            <div class="security-icon">🤝</div>
-            <h3>No Data Sharing</h3>
-            <p>We never share your data with third parties. Your chats remain private.</p>
-          </div>
-          <div class="security-feature">
-            <div class="security-icon">🧹</div>
-            <h3>Automatic Cleanup</h3>
-            <p>Uploaded files are automatically deleted after processing.</p>
-          </div>
+    <!-- CTA Section -->
+    <section class="py-16 gradient-bg">
+        <div class="container mx-auto px-6 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold mb-6 text-white">Ready to analyze your conversations?</h2>
+            <p class="text-xl text-white opacity-90 mb-10 max-w-2xl mx-auto">Start analyzing your chat logs today and unlock valuable insights to improve interactions.</p>
+            
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="analyze.html" class="bg-white text-primary font-semibold py-3 px-8 !rounded-button shadow-lg hover:bg-gray-100 transition-all whitespace-nowrap">Try It Now</a>
+            </div>
         </div>
-      </div>
-      <div class="security-image">
-        <div class="shield-icon">🛡️</div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- How It Works Section -->
-  <section class="how-it-works">
-    <div class="container">
-      <h2>How It Works</h2>
-      <div class="steps">
-        <div class="step">
-          <div class="step-number">1</div>
-          <p>Export your WhatsApp chat history</p>
+    <!-- Pricing Section -->
+    <section class="py-20 bg-white">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">Buy credits now to analyze your conversations with AI, 1 credit ≈ 5000 words</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                <!-- Basic Plan -->
+                <div class="bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden transition-all hover:shadow-lg">
+                    <div class="p-6 border-b border-gray-200">
+                        <h3 class="text-2xl font-bold mb-2">Starter Pack</h3>
+                        <div class="flex items-baseline mb-4">
+                            <span class="text-4xl font-bold">$3.99</span>
+                        </div>
+                        <p class="text-gray-600">40 credits</p>
+                    </div>
+                    <div class="p-6">
+                        <ul class="space-y-3">
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>Full AI insights</span>
+                            </li>
+                            
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>Understand your conversations</span>
+                            </li>
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>Fix issues within your chats and relationships</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Pro Plan -->
+                <div class="bg-white border-2 border-primary rounded-xl shadow-lg overflow-hidden transform scale-105 z-10">
+                    <div class="gradient-bg text-white p-6">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="text-2xl font-bold">Power User</h3>
+                            <span class="bg-white text-primary text-xs font-bold px-3 py-1 rounded-full">POPULAR</span>
+                        </div>
+                        <div class="flex items-baseline mb-4">
+                            <span class="text-4xl font-bold">$6.49</span>
+                        </div>
+                        <p class="text-white opacity-90">95 credits</p>
+                    </div>
+                    <div class="p-6">
+                        <ul class="space-y-3">
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>30% savings</span>
+                            </li>
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>Full AI insights</span>
+                            </li>
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>Understand your conversations</span>
+                            </li>
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>Fix issues within your chats and relationships</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Enterprise Plan -->
+                <div class="bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden transition-all hover:shadow-lg">
+                    <div class="p-6 border-b border-gray-200">
+                        <h3 class="text-2xl font-bold mb-2">Premium</h3>
+                        <div class="flex items-baseline mb-4">
+                            <span class="text-4xl font-bold">$9.99</span>
+                        </div>
+                        <p class="text-gray-600">170 credits</p>
+                    </div>
+                    <div class="p-6">
+                        <ul class="space-y-3">
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>40% savings</span>
+                            </li>
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>Enough for enourmous chats</span>
+                            </li>
+                            <li class="flex items-center">
+                                <i class="ri-check-line text-green-500 mr-2"></i>
+                                <span>Everything in the Basic pack</span>
+                            </li>
+
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="step">
-          <div class="step-number">2</div>
-          <p>Upload the file to our analyzer</p>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="py-20 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Frequently Asked Questions</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">Find answers to common questions about our chatphantom</p>
+            </div>
+            
+            <div class="max-w-3xl mx-auto space-y-6">
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <button class="flex justify-between items-center w-full p-6 text-left font-semibold text-lg" onclick="toggleFaq(this)">
+                        <span>What types of chat logs can I analyze?</span>
+                        <i class="ri-arrow-down-s-line transition-transform"></i>
+                    </button>
+                    <div class="px-6 pb-6 hidden">
+                        <p class="text-gray-700">For now, the only chat logs you can analyse are from whatsapp, in a .txt or .zip format</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <button class="flex justify-between items-center w-full p-6 text-left font-semibold text-lg" onclick="toggleFaq(this)">
+                        <span>Is my data secure?</span>
+                        <i class="ri-arrow-down-s-line transition-transform"></i>
+                    </button>
+                    <div class="px-6 pb-6 hidden">
+                        <p class="text-gray-700">Yes, we make sure absolutely nothing is used or sent to third-party services for advertising or other purposes, your data is safe with us.</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <button class="flex justify-between items-center w-full p-6 text-left font-semibold text-lg" onclick="toggleFaq(this)">
+                        <span>Can I export the analysis results?</span>
+                        <i class="ri-arrow-down-s-line transition-transform"></i>
+                    </button>
+                    <div class="px-6 pb-6 hidden">
+                        <p class="text-gray-700">You can't export the analysis results yet, but we're working on it. Take screenshots!</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <button class="flex justify-between items-center w-full p-6 text-left font-semibold text-lg" onclick="toggleFaq(this)">
+                        <span>Can I get a refund?</span>
+                        <i class="ri-arrow-down-s-line transition-transform"></i>
+                    </button>
+                    <div class="px-6 pb-6 hidden">
+                        <p class="text-gray-700">Yes, we offer a refund for purchases within 14 days that haven't been used at all. Once you analyze a chat, this deal expires</p>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="step">
-          <div class="step-number">3</div>
-          <p>Get instant insights</p>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white pt-16 pb-8">
+        <div class="container mx-auto px-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+                
+                <div>
+                    <h4 class="text-lg font-semibold mb-4">Product</h4>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-white transition-colors">Features</a></li>
+                        <li><a href="credits.html" class="text-gray-400 hover:text-white transition-colors">Pricing</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="text-lg font-semibold mb-4">Legal</h4>
+                    <ul class="space-y-2">
+                        <li><a href="terms.html" class="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
+                        <li><a href="privacyPolicy.html" class="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
+                <p class="text-gray-400 text-sm mb-4 md:mb-0">&copy; 2025 ChatAnalyzer. All rights reserved.</p>
+                
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center">
+                        <i class="ri-visa-fill ri-lg mr-2"></i>
+                        <i class="ri-mastercard-fill ri-lg mr-2"></i>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </section>
+    </footer>
 
-  <!-- Footer -->
-  
+    <script>
+        function toggleFaq(element) {
+            const content = element.nextElementSibling;
+            const icon = element.querySelector('i');
+            
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                content.classList.add('hidden');
+                icon.style.transform = 'rotate(0)';
+            }
+        }
 
-
-
-<!-- Stats Section -->
-<section class="stats">
-  <div class="container">
-    <h2>Trusted by Thousands</h2>
-    <div class="stats-grid">
-      <div class="stat-card">
-        <h3>20,000+</h3>
-        <p>Chats Analyzed</p>
-      </div>
-      <div class="stat-card">
-        <h3>4.8★</h3>
-        <p>Average User Rating</p>
-      </div>
-      <div class="stat-card">
-        <h3>95%</h3>
-        <p>User Satisfaction</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Testimonials -->
-<section class="testimonials">
-  <div class="container">
-    <h2>What Our Users Say</h2>
-    <div class="testimonials-grid">
-      <div class="testimonial">
-        <p>“This tool helped me understand how I communicate in my relationship. Super insightful!”</p>
-        <h4>— Sarah T.</h4>
-      </div>
-      <div class="testimonial">
-        <p>“Loved the visual timelines and stats. It's like having a mirror for your chats.”</p>
-        <h4>— Carlos M.</h4>
-      </div>
-      <div class="testimonial">
-        <p>“A fun and helpful experience. I even discovered I talk way more than I thought 😅.”</p>
-        <h4>— Ayesha K.</h4>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="benefits">
-  <div class="container">
-    <div class="benefits-content">
-      <h2>Why Analyze Your Chats?</h2>
-      <ul>
-        <li>🔍 Understand your communication patterns in relationships</li>
-        <li>💡 Gain self-awareness about how you interact</li>
-        <li>📈 Track how your conversations evolve over time</li>
-        <li>🤖 Get AI-powered suggestions for better communication</li>
-        <li>📱 Discover fun facts about your chat habits</li>
-      </ul>
-      <div class="cta-container">
-        <a href="analyze.html" class="cta-button">Start Analyzing Now</a>
-        <p class="cta-subtext">It's free and takes less than 2 minutes</p>
-      </div>
-    </div>
-    <div class="benefits-image">
-      <img src="assets/benefits-illustration.png" alt="Chat Analysis Benefits">
-    </div>
-  </div>
-</section>
-
-<section class="faq">
-  <div class="container">
-    <h2>Frequently Asked Questions</h2>
-    <div class="faq-item">
-      <button class="faq-question">Is my data safe and private?</button>
-      <div class="faq-answer">
-        <p>Yes. All uploaded chats are anonymized and deleted after processing. We never share your data.</p>
-      </div>
-    </div>
-    <div class="faq-item">
-      <button class="faq-question">Can I use this for group chats?</button>
-      <div class="faq-answer">
-        <p>Absolutely! Our analyzer supports both individual and group chats, with fun group insights like most active users.</p>
-      </div>
-    </div>
-    <div class="faq-item">
-      <button class="faq-question">What file formats are supported?</button>
-      <div class="faq-answer">
-        <p>You can upload WhatsApp text exports (.txt). Make sure they are unedited for best results.</p>
-      </div>
-    </div>
-    <div class="faq-item">
-      <button class="faq-question">Do I need a Google account?</button>
-      <div class="faq-answer">
-        <p>Currently yes. Google Sign-In helps us verify users without needing passwords.</p>
-      </div>
-    </div>
-  </div>
-</section>
-<script>
-  document.querySelectorAll('.faq-question').forEach(button => {
-    button.addEventListener('click', () => {
-      const item = button.parentElement;
-      item.classList.toggle('open');
-    });
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize the first FAQ item as open
+            const firstFaq = document.querySelector('.bg-white.rounded-lg.shadow-md button');
+            if (firstFaq) {
+                toggleFaq(firstFaq);
+            }
+        });
+    </script>
+    <script>
+  document.addEventListener('DOMContentLoaded', function() {
+  console.log('Dropdown script running'); // Debug log
+  const userDropdown = document.querySelector('.user-dropdown');
+  if (!userDropdown) {
+    console.log('No user-dropdown found'); // Debug log
+    return;
+  }
+  const avatar = userDropdown.querySelector('.user-avatar');
+  const dropdownMenu = document.querySelector('.dropdown-menu');
+  avatar.addEventListener('click', function(e) {
+    console.log('Avatar clicked'); // Debug log
+    e.stopPropagation();
+    dropdownMenu.classList.toggle('show');
   });
+  document.addEventListener('click', function() {
+    console.log('Document clicked, closing dropdown'); // Debug log
+    dropdownMenu.classList.remove('show');
+  });
+});
 </script>
-
-<!-- Footer with Links -->
-<footer class="footer extended-footer">
-  <div class="container">
-    <div class="footer-links">
-      <div>
-        <h4>Product</h4>
-        <a href="analyze.html">Start Analysis</a>
-        <a href="dashboard.html">Dashboard</a>
-      </div>
-      <div>
-        <h4>Legal</h4>
-        <a href="terms.html">Terms of Service</a>
-        <a href="#">Privacy Policy</a>
-      </div>
-      <div>
-        <h4>Company</h4>
-        <a href="#">About Us</a>
-        <a href="#">Contact</a>
-      </div>
-    </div>
-    <p>© 2023 ConvoClarity. All rights reserved.</p>
-  </div>
-</footer>
 
 </body>
 </html>

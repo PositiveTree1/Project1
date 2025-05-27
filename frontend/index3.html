@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" href="assets/chatPhantom.png">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp AI Analyzer | Understand Your Chats</title>
+  <!-- In analyze.html and index.html -->
+<link rel="stylesheet" href="styles/navbar.css">
+<link rel="stylesheet" href="styles/landing.css"> <!-- or landing.css -->
+<script>
+  function initGoogleSignIn() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        window.setupGoogleButton();
+      });
+    } else {
+      window.setupGoogleButton();
+    }
+  }
+</script>
+
+<!-- 2) GSI client calls our initGoogleSignIn when it's ready -->
+<script
+  src="https://accounts.google.com/gsi/client"
+  async defer
+  onload="initGoogleSignIn()"
+></script>
+
+<!-- 3) authCheck.js defines setupGoogleButton and attaches it to window -->
+<script type="module" src="/scripts/authCheck.js"></script>
+
+<!-- 4) Other scripts -->
+<script type="module" src="/scripts/api.js" defer></script>
+<script type="module" src="/scripts/landing.js" defer></script>
+</head>
+<body class="index-page">
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="navbar-container">
+      <a href="index.html" class="logo-link">
+        <div class="logo">
+          <img src="assets/chatPhantom.png" alt="ChatPhantom">
+          <span class="logo-text">ChatPhantom</span>
+        </div>
+      </a>
+      <div class="auth-container">
+        <!-- hidden by default until renderAuthUI shows them -->
+      <div class="credits-display hidden">
+        <img src="assets/credit5.png" alt="Credits" class="credit-icon">
+        <span id="creditCount">0</span>
+      </div>
+
+      <div id="gSignInWrapper">
+        <!-- Google button is visible until logged in -->
+        <div id="googleSignInButton" class="g-signin2"></div>
+
+        <!-- user-dropdown hidden until logged in -->
+        <div class="user-dropdown hidden">
+          <img id="userAvatar" class="user-avatar" src="assets/default-avatar.png" alt="Profile Picture">
+          <div class="dropdown-menu">
+            <a href="analyze.html" class="dropdown-item">Analysis</a>
+            <a href="dashboard.html" class="dropdown-item">Dashboard</a>
+            <a href="credits.html" class="dropdown-item">Credits</a>
+            <div class="dropdown-divider"></div>
+            <button id="logoutButton" class="dropdown-item">Sign Out</button>
+          </div>
+        </div>
+      </div>
+
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <h1>Unlock Insights from Your Chats with AI</h1>
+        <div class="rotating-text">
+          <span class="text-item active">Analyze relationship dynamics</span>
+          <span class="text-item">Track conversation patterns</span>
+          <span class="text-item">Discover communication styles</span>
+          <span class="text-item">Get AI-powered insights</span>
+          <span class="text-item">Improve your relationship</span>
+        </div>
+        <a href="analyze.html" class="cta-button">Try It Yourself</a>
+      </div>
+      <div class="hero-bullets">
+        <div class="bullet-point">
+          <div class="bullet-icon">🔍</div>
+          <p>Deep analysis of your chat history</p>
+        </div>
+        <div class="bullet-point">
+          <div class="bullet-icon">🤖</div>
+          <p>AI-powered relationship insights</p>
+        </div>
+        <div class="bullet-point">
+          <div class="bullet-icon">📱</div>
+          <p>Get relationship tips</p>
+        </div> 
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <!-- Visual Analysis Showcase Section -->
+<section class="visual-showcase">
+  <div class="container">
+    <h2>See Your Chat Story Unfold</h2>
+    <p class="subtitle">AI-powered visualizations that reveal hidden patterns in your conversations</p>
+    
+    <div class="showcase-container">
+      <!-- Timeline Visualization -->
+      <div class="analysis-card timeline-card">
+        <div class="card-content">
+          <h3>Message Timeline</h3>
+          <p>See your conversation history mapped over time with interactive zooming</p>
+          <a href="analyze.html" class="cta-button">Try It Now</a>
+        </div>
+        <div class="card-preview">
+          <img src="assets/timeline-preview2.png" alt="Message timeline visualization" class="preview-image">
+        </div>
+      </div>
+      
+      <!-- Word Cloud -->
+      <div class="analysis-card wordcloud-card">
+        <div class="card-content">
+          <h3>Word Cloud</h3>
+          <p>Discover your most frequently used words in a beautiful visual cloud</p>
+          <a href="analyze.html" class="cta-button">Try It Now</a>
+        </div>
+        <div class="card-preview">
+          <img src="assets/wordcloud-preview.png" alt="Word cloud visualization" class="preview-image">
+        </div>
+      </div>
+      
+      <!-- Sentiment Analysis -->
+      <div class="analysis-card sentiment-card">
+        <div class="card-content">
+          <h3>Personal Cards</h3>
+          <p>Discover fun Statistics about yourself and others</p>
+          <a href="analyze.html" class="cta-button">Try It Now</a>
+        </div>
+        <div class="card-preview">
+          <img src="assets/sentiment-preview.png" alt="Sentiment analysis visualization" class="preview-image">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+  <section class="analysis-preview">
+    <div class="container">
+      <h2>See What You'll Discover</h2>
+      <div class="preview-grid">
+        <div class="preview-card">
+          <img src="assets/analysis-screenshot1.png" alt="Message Frequency Analysis">
+          <h3>Message Patterns</h3>
+          <p>See who initiates conversations and response times</p>
+          <a href="analyze.html" class="cta-button secondary">Try Analysis</a>
+        </div>
+        <div class="preview-card">
+          <img src="assets/analysis-screenshot2.png" alt="Word Cloud Visualization">
+          <h3>Red Flags and Green Flags</h3>
+          <p>See what your main drawbacks are</p>
+          <a href="analyze.html" class="cta-button secondary">Try Analysis</a>
+        </div>
+        <div class="preview-card">
+          <img src="assets/analysis-screenshot3.png" alt="Sentiment Analysis">
+          <h3>Sentiment Trends</h3>
+          <p>Track emotional tone over time</p>
+          <a href="analyze.html" class="cta-button secondary">Try Analysis</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security Section -->
+  <section class="security">
+    <div class="container">
+      <div class="security-content">
+        <h2>Your Data is Secure</h2>
+        <div class="security-features">
+          <div class="security-feature">
+            <div class="security-icon">🔒</div>
+            <h3>End-to-End Encryption</h3>
+            <p>Your chat data is anonymized during transfer and never stored permanently.</p>
+          </div>
+          <div class="security-feature">
+            <div class="security-icon">🤝</div>
+            <h3>No Data Sharing</h3>
+            <p>We never share your data with third parties. Your chats remain private.</p>
+          </div>
+          <div class="security-feature">
+            <div class="security-icon">🧹</div>
+            <h3>Automatic Cleanup</h3>
+            <p>Uploaded files are automatically deleted after processing.</p>
+          </div>
+        </div>
+      </div>
+      <div class="security-image">
+        <div class="shield-icon">🛡️</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="how-it-works">
+    <div class="container">
+      <h2>How It Works</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <p>Export your WhatsApp chat history</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <p>Upload the file to our analyzer</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <p>Get instant insights</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  
+
+
+
+<!-- Stats Section -->
+<section class="stats">
+  <div class="container">
+    <h2>Trusted by Thousands</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>20,000+</h3>
+        <p>Chats Analyzed</p>
+      </div>
+      <div class="stat-card">
+        <h3>4.8★</h3>
+        <p>Average User Rating</p>
+      </div>
+      <div class="stat-card">
+        <h3>95%</h3>
+        <p>User Satisfaction</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Testimonials -->
+<section class="testimonials">
+  <div class="container">
+    <h2>What Our Users Say</h2>
+    <div class="testimonials-grid">
+      <div class="testimonial">
+        <p>“This tool helped me understand how I communicate in my relationship. Super insightful!”</p>
+        <h4>— Sarah T.</h4>
+      </div>
+      <div class="testimonial">
+        <p>“Loved the visual timelines and stats. It's like having a mirror for your chats.”</p>
+        <h4>— Carlos M.</h4>
+      </div>
+      <div class="testimonial">
+        <p>“A fun and helpful experience. I even discovered I talk way more than I thought 😅.”</p>
+        <h4>— Ayesha K.</h4>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="benefits">
+  <div class="container">
+    <div class="benefits-content">
+      <h2>Why Analyze Your Chats?</h2>
+      <ul>
+        <li>🔍 Understand your communication patterns in relationships</li>
+        <li>💡 Gain self-awareness about how you interact</li>
+        <li>📈 Track how your conversations evolve over time</li>
+        <li>🤖 Get AI-powered suggestions for better communication</li>
+        <li>📱 Discover fun facts about your chat habits</li>
+      </ul>
+      <div class="cta-container">
+        <a href="analyze.html" class="cta-button">Start Analyzing Now</a>
+        <p class="cta-subtext">It's free and takes less than 2 minutes</p>
+      </div>
+    </div>
+    <div class="benefits-image">
+      <img src="assets/benefits-illustration.png" alt="Chat Analysis Benefits">
+    </div>
+  </div>
+</section>
+
+<section class="faq">
+  <div class="container">
+    <h2>Frequently Asked Questions</h2>
+    <div class="faq-item">
+      <button class="faq-question">Is my data safe and private?</button>
+      <div class="faq-answer">
+        <p>Yes. All uploaded chats are anonymized and deleted after processing. We never share your data.</p>
+      </div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-question">Can I use this for group chats?</button>
+      <div class="faq-answer">
+        <p>Absolutely! Our analyzer supports both individual and group chats, with fun group insights like most active users.</p>
+      </div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-question">What file formats are supported?</button>
+      <div class="faq-answer">
+        <p>You can upload WhatsApp text exports (.txt). Make sure they are unedited for best results.</p>
+      </div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-question">Do I need a Google account?</button>
+      <div class="faq-answer">
+        <p>Currently yes. Google Sign-In helps us verify users without needing passwords.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<script>
+  document.querySelectorAll('.faq-question').forEach(button => {
+    button.addEventListener('click', () => {
+      const item = button.parentElement;
+      item.classList.toggle('open');
+    });
+  });
+</script>
+
+<!-- Footer with Links -->
+<footer class="footer extended-footer">
+  <div class="container">
+    <div class="footer-links">
+      <div>
+        <h4>Product</h4>
+        <a href="analyze.html">Start Analysis</a>
+        <a href="dashboard.html">Dashboard</a>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <a href="terms.html">Terms of Service</a>
+        <a href="#">Privacy Policy</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="#">About Us</a>
+        <a href="#">Contact</a>
+      </div>
+    </div>
+    <p>© 2023 ConvoClarity. All rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>

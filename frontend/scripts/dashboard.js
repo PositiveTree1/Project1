@@ -1,148 +1,167 @@
-import { getAnalyses, deleteAnalysis, getAnalysisHTML } from './api.js';
+import { getAnalyses, deleteAnalysis } from './api.js';
 
-// DOM elements
-const chatList = document.getElementById('chatList');
-const emptyState = document.getElementById('emptyState');
+const chatList         = document.getElementById('chatList');
+const emptyState       = document.getElementById('emptyState');
 const loadingIndicator = document.getElementById('loadingIndicator');
-const totalChatsElement = document.getElementById('totalChats');
-
-// Initialize dashboard
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname.includes('dashboard.html')) {
-        loadChatHistory();
-        setupEventListeners();
-    }
-});
-
-async function loadChatHistory() {
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user) {
-        showEmptyState();
-        return;
-    }
-
-    showLoading();
-    
-    try {
-        const analyses = await getAnalyses(user.sub);
-        if (analyses.length === 0) {
-            showEmptyState();
-        } else {
-            renderAnalysisCards(analyses);
-            totalChatsElement.textContent = analyses.length;
-        }
-    } catch (error) {
-        console.error("Failed to load chat history:", error);
-        showErrorState();
-    } finally {
-        hideLoading();
-    }
-}
-
-function renderAnalysisCards(analyses) {
-    chatList.innerHTML = '';
-    emptyState.style.display = 'none';
-
-    analyses.sort((a, b) => new Date(b.metadata.createdAt) - new Date(a.metadata.createdAt));
-
-    analyses.forEach(analysis => {
-        const card = document.createElement('div');
-        card.className = 'analysis-card';
-        card.innerHTML = `
-            <div class="analysis-header">
-                <h3>${formatAnalysisTitle(analysis.metadata)}</h3>
-                <span class="analysis-date">${formatDate(analysis.metadata.createdAt)}</span>
-            </div>
-            <div class="analysis-meta">
-                <span class="meta-item">${analysis.metadata.messageCount} messages</span>
-                <span class="meta-item">${analysis.metadata.participants.length} people</span>
-                <span class="meta-item">${formatDateRange(analysis.metadata.dateRange)}</span>
-            </div>
-            <div class="analysis-actions">
-                <button class="btn view-btn" data-id="${analysis.id}">View</button>
-                <button class="btn delete-btn" data-id="${analysis.id}">Delete</button>
-            </div>
-        `;
-        chatList.appendChild(card);
-    });
-}
-
-function setupEventListeners() {
-    // View button click
-    document.addEventListener('click', async (e) => {
-        if (e.target.classList.contains('view-btn')) {
-            const analysisId = e.target.dataset.id;
-            window.location.href = `analysis.html?id=${analysisId}`;
-        }
-        
-        // Delete button click
-        if (e.target.classList.contains('delete-btn')) {
-            const analysisId = e.target.dataset.id;
-            if (confirm('Are you sure you want to delete this analysis?')) {
-                try {
-                    await deleteAnalysis(analysisId);
-                    loadChatHistory(); // Refresh the list
-                } catch (error) {
-                    console.error("Failed to delete analysis:", error);
-                    alert("Failed to delete analysis. Please try again.");
-                }
-            }
-        }
-    });
-}
-
-// Helper functions
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
-    });
-}
-
-function formatDateRange(dateRange) {
-    if (!dateRange || !dateRange.startDate || !dateRange.endDate) return 'N/A';
-    return `${formatDate(dateRange.startDate)} - ${formatDate(dateRange.endDate)}`;
-}
-
-function formatAnalysisTitle(metadata) {
-    if (metadata.chatName) return metadata.chatName;
-    if (metadata.participants?.length > 0) {
-        return `Chat with ${metadata.participants.join(' & ')}`;
-    }
-    return 'Chat Analysis';
-}
+const totalChatsElem   = document.getElementById('totalChats');
 
 function showLoading() {
-    loadingIndicator.style.display = 'block';
-    chatList.style.display = 'none';
-    emptyState.style.display = 'none';
+  loadingIndicator.style.display = 'block';
+  chatList.style.display       = 'none';
+  emptyState.style.display     = 'none';
 }
-
 function hideLoading() {
-    loadingIndicator.style.display = 'none';
-    chatList.style.display = 'grid';
+  loadingIndicator.style.display = 'none';
+  chatList.style.display       = 'grid';
 }
-
 function showEmptyState() {
-    emptyState.style.display = 'flex';
-    chatList.style.display = 'none';
-    loadingIndicator.style.display = 'none';
+  emptyState.style.display       = 'flex';
+  chatList.style.display         = 'none';
+  loadingIndicator.style.display = 'none';
+  chatList.innerHTML             = '';  // ← add this line
 }
 
 function showErrorState() {
-    emptyState.innerHTML = `
-        <div class="error-state">
-            <i class="fas fa-exclamation-triangle"></i>
-            <p>Failed to load analyses. Please try again later.</p>
-            <button class="btn retry-btn">Retry</button>
-        </div>
-    `;
-    emptyState.style.display = 'flex';
-    chatList.style.display = 'none';
-    loadingIndicator.style.display = 'none';
-    
-    // Add retry button listener
-    document.querySelector('.retry-btn')?.addEventListener('click', loadChatHistory);
+  emptyState.innerHTML = `
+    <div class="error-state">
+      <i class="fas fa-exclamation-triangle"></i>
+      <p>Failed to load analyses. Please try again later.</p>
+      <button class="btn retry-btn">Retry</button>
+    </div>`;
+  emptyState.style.display     = 'flex';
+  chatList.style.display       = 'none';
+  loadingIndicator.style.display = 'none';
+
+  document.querySelector('.retry-btn')?.addEventListener('click', loadChatHistory);
 }
+
+function formatDate(dateString) {
+  return new Date(dateString).toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function renderAnalysisList(list) {
+  console.log('Analyses:', list);
+  totalChatsElem.textContent = list.length;
+  chatList.innerHTML = list.map(a => {
+    const participants = a.analysisData.metadata.participants || [];
+    let title;
+    if (participants.length > 3) {
+      title = participants.slice(0, 3).join(' & ') + ' & ...';
+    } else {
+      title = participants.join(' & ');
+    }
+    if (!title) title = 'Chat Analysis';
+    const date = formatDate(a.createdAt);
+    
+    // Check for AI analysis
+    const hasAI = a.analysisData.html.includes('ai-analysis-complete');
+    const aiPill = hasAI ? '<div class="ai-pill"><span class="ai-logo"></span>AI</div>' : '';
+    
+    // Check for expiration time
+    let expirationPill = '';
+    if (a.expiresAt) {
+      const expiresAt = new Date(a.expiresAt);
+      const now = new Date();
+      const timeLeft = expiresAt - now;
+      
+      if (timeLeft > 0) {
+        const minutesLeft = Math.ceil(timeLeft / (1000 * 60));
+        expirationPill = `
+          <div class="expiration-pill">
+            <i class="fas fa-clock"></i>
+            <span class="expiration-time">${minutesLeft}m</span>
+          </div>
+        `;
+      }
+    }
+    
+    return `
+      <div class="chat-card" data-expires-at="${a.expiresAt || ''}">
+        <div class="card-header">
+          ${aiPill}
+          ${expirationPill}
+        </div>
+        <h3 class="chat-title">${title}</h3>
+        <p class="chat-date">${date}</p>
+        <div class="chat-actions">
+          <button class="view-button" data-id="${a.id}">Open</button>
+          <button class="delete-button" data-id="${a.id}">Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+// Add this function to dashboard.js
+function startExpirationTimers() {
+  const updateTimers = () => {
+    document.querySelectorAll('.chat-card').forEach(card => {
+      const expiresAt = card.dataset.expiresAt;
+      const pillEl = card.querySelector('.expiration-pill .expiration-time');
+      if (!expiresAt || !pillEl) return;
+
+      const timeLeft = new Date(expiresAt) - new Date();
+      if (timeLeft > 0) {
+        const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
+        pillEl.textContent = `Expires in ${daysLeft}d`;
+      } else {
+        pillEl.textContent = 'Expired';
+        pillEl.style.color = '#f44336'; 
+        card.style.opacity = '0.5';
+        card.style.pointerEvents = 'none';
+      }
+    });
+  };
+
+  // Update immediately
+  updateTimers();
+}
+
+async function loadChatHistory() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  if (!user.sub) {
+    showEmptyState();
+    return;
+  }
+
+  showLoading();
+  try {
+    const list = await getAnalyses(user.sub);
+    if (list.length === 0) {
+      showEmptyState();
+    } else {
+      renderAnalysisList(list);
+      startExpirationTimers(); // Add this line
+    }
+  } catch (err) {
+    console.error('❌ loadChatHistory failed:', err);
+    showErrorState();
+  } finally {
+    hideLoading();
+  }
+}
+
+function setupEventListeners() {
+  document.addEventListener('click', async e => {
+    const id = e.target.dataset.id;
+    if (e.target.classList.contains('view-button')) {
+      window.location.href = `analyze.html?id=${id}`;
+    }
+    if (e.target.classList.contains('delete-button')) {      if (confirm('Delete this analysis?')) {
+        try {
+          await deleteAnalysis(id);
+          await loadChatHistory();
+        } catch {
+          alert('Failed to delete. Try again.');
+        }
+      }
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Always refresh when this page is (re)loaded or the user navigates back
+  loadChatHistory();
+  setupEventListeners();
+});

@@ -6,73 +6,34 @@
  * @param {object} data - Analysis data {html, metadata}
  * @returns {Promise} Resolves with saved analysis data
  */
-export async function saveAnalysisHTML(userId, data) {
-  try {
-      const res = await fetch('/api/save-analysis', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, ...data })
-      });
-      
-      if (!res.ok) {
-          throw new Error(await res.text());
-      }
-      
-      return await res.json();
-  } catch (error) {
-      console.error('Failed to save analysis:', error);
-      throw error;
-  }
-}
 
 /**
 * Gets all saved analyses for a user
 * @param {string} userId - User ID from auth
 * @returns {Promise} Resolves with array of analyses
 */
-export async function getAnalyses(userId) {
-  try {
-      const res = await fetch(`/api/get-analyses/${userId}`);
-      if (!res.ok) throw new Error('Failed to fetch analyses');
-      return await res.json();
-  } catch (error) {
-      console.error('Failed to get analyses:', error);
-      throw error;
-  }
-}
+
 
 /**
 * Gets a specific analysis by ID
 * @param {string} chatId - Analysis ID
 * @returns {Promise} Resolves with analysis data
 */
-export async function getAnalysisHTML(chatId) {
-  try {
-      const res = await fetch(`/api/get-analysis/${chatId}`);
-      if (!res.ok) throw new Error('Failed to fetch analysis');
-      return await res.json();
-  } catch (error) {
-      console.error('Failed to get analysis:', error);
-      throw error;
-  }
-}
 
 /**
 * Deletes an analysis
 * @param {string} chatId - Analysis ID to delete
 * @returns {Promise} Resolves when deletion is complete
 */
-export async function deleteAnalysis(chatId) {
-  try {
-      const res = await fetch(`/api/delete-analysis/${chatId}`, {
-          method: 'DELETE'
-      });
-      if (!res.ok) throw new Error('Failed to delete analysis');
-      return await res.json();
-  } catch (error) {
-      console.error('Failed to delete analysis:', error);
-      throw error;
-  }
+// DELETE /api/delete-analysis/:userId/:analysisId
+export async function deleteAnalysis(analysisId) {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  if (!user.sub) throw new Error('Not signed in');
+  const res = await fetch(`/api/delete-analysis/${user.sub}/${analysisId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete analysis');
+  return res.json();
 }
 
 /**
@@ -117,5 +78,88 @@ export async function getCredits(userId) {
   } catch (error) {
       console.error('Failed to get credits:', error);
       throw error;
+  }
+}
+
+// In api.js - add these new functions
+
+/**
+ * Saves raw analysis data to the database
+ * @param {string} userId - User ID from auth
+ * @param {object} data - Raw analysis data
+ * @returns {Promise} Resolves with saved analysis data
+ */
+
+  /**
+   * Gets raw analysis data by ID
+   * @param {string} chatId - Analysis ID
+   * @returns {Promise} Resolves with raw analysis data
+   */
+  export async function getAnalysisData(chatId) {
+    try {
+        const res = await fetch(`/api/get-analysis-data/${chatId}`);
+        if (!res.ok) throw new Error('Failed to fetch analysis data');
+        return await res.json();
+    } catch (error) {
+        console.error('Failed to get analysis data:', error);
+        throw error;
+    }
+  }
+export async function saveAnalysisHTML(userId, { html, metadata }, basic) {
+    const res = await fetch('/api/save-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            userId,
+            analysisData: { html, metadata },
+            basic // <-- tell the server if this is a “basic” chat
+        })
+    });
+    if (!res.ok) throw new Error('Failed to save analysis');
+    return res.json();
+}
+
+
+  // GET /api/get-analyses/:userId
+export async function getAnalyses(userId) {
+    const res = await fetch(`/api/get-analyses/${userId}`);
+    if (!res.ok) throw new Error('Failed to fetch analyses');
+    return res.json(); // → [ { id, analysisData:{html,metadata}, createdAt }… ]
+  }
+  
+  
+  export async function getAnalysisHTML(analysisId) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!user.sub) throw new Error('Not signed in');
+    const res = await fetch(`/api/get-analysis/${user.sub}/${analysisId}`);
+    if (!res.ok) throw new Error('Failed to fetch analysis HTML');
+    return res.json();  // { id, analysisData:{ html, metadata } }
+  }
+
+
+// api.js
+export async function updateAnalysisHTML(userId, analysisId, html, isBasic = false) {
+  const res = await fetch(`/api/update-analysis/${userId}/${analysisId}`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ html, isBasic }) // Add isBasic parameter
+  });
+  if (!res.ok) throw new Error('Update failed');
+  return res.json();
+}
+
+/**
+ * Gets all transactions for a user
+ * @param {string} userId - User ID from auth
+ * @returns {Promise} Resolves with array of transactions
+ */
+export async function getUserTransactions(userId) {
+  try {
+    const res = await fetch(`/api/user-transactions/${userId}`);
+    if (!res.ok) throw new Error('Failed to fetch transactions');
+    return await res.json();
+  } catch (error) {
+    console.error('Failed to get transactions:', error);
+    throw error;
   }
 }

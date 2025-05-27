@@ -26,9 +26,36 @@
     <link rel="stylesheet" href="styles/navbar.css">
     <link rel="stylesheet" href="styles/dashboard.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  
+    <style>
+      .ai-pill {
+        display: inline-flex;
+        align-items: center;
+        background-color: #e0e0e0;
+        border-radius: 12px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 5px;
+      }
+      .ai-logo {
+        width: 17px;
+        height: 17px;
+        margin-right: 4px;
+        background-image: url('assets/logoAI.png'); /* Adjust this path if necessary */
+        background-size: cover;
+        background-position: center;
+      }
+      .chat-card {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem; /* Ensure space for the pill */
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        transition: transform 0.3s, box-shadow 0.3s;
+      }
+    </style>
     <!-- 3) Auth + app scripts -->
     <script type="module" src="scripts/authCheck.js" defer></script>
+    
   </head>
   
 <body class="dashboard-page">
@@ -42,10 +69,12 @@
       </a>    
       <div class="auth-container">
         <!-- hidden by default until renderAuthUI shows them -->
-      <div class="credits-display hidden">
-        <img src="assets/credit5.png" alt="Credits" class="credit-icon">
-        <span id="creditCount">0</span>
-      </div>
+      <a href="credits.html" class="credits-link">
+        <div class="credits-display hidden" id="creditsContainer">
+          <img src="assets/credit5.png" alt="Credits" class="credit-icon">
+          <span id="creditCount">0</span>
+        </div>
+      </a>
 
       <div id="gSignInWrapper">
         <!-- Google button is visible until logged in -->
@@ -81,17 +110,22 @@
     </div>
 
     <div class="dashboard-content">
-      <div class="empty-state" id="emptyState">
-        <div class="empty-icon">📊</div>
-        <h2>No chats analyzed yet</h2>
-        <p>Upload your first chat to see detailed analytics</p>
-        <a href="analyze.html" class="cta-button">Analyze Chat</a>
-      </div>
-
-      <div class="chat-list" id="chatList">
-        <!-- Chat cards will be dynamically added here -->
-      </div>
-    </div>
+           <div id="loadingIndicator" style="display:none; text-align:center; padding:2rem;">
+             Loading your chats…
+           </div>
+           <div class="empty-state" id="emptyState">
+              <div class="empty-icon">📊</div>
+              <h2>No chats analyzed yet</h2>
+              <p>Upload your first chat to see detailed analytics</p>
+              <a href="analyze.html" class="cta-button">Analyze Chat</a>
+            </div>
+      
+            
+      
+            <div class="chat-list" id="chatList">
+              <!-- Chat cards will be dynamically added here -->
+            </div>
+          </div>
   </div>
 
   <script type="module" src="/scripts/authCheck.js"></script>
@@ -109,15 +143,10 @@
       <div>
         <h4>Legal</h4>
         <a href="terms.html">Terms of Service</a>
-        <a href="#">Privacy Policy</a>
-      </div>
-      <div>
-        <h4>Company</h4>
-        <a href="#">About Us</a>
-        <a href="#">Contact</a>
+        <a href="privacyPolicy.html">Privacy Policy</a>
       </div>
     </div>
-    <p>© 2023 ConvoClarity. All rights reserved.</p>
+    <p>© 2023 ChatPhantom. All rights reserved.</p>
   </div>
 </footer>
 </body>

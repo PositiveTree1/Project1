@@ -1,7 +1,6 @@
 // frontend/scripts/authCheck.js
 // Make setupGoogleButton available globally for initGoogleSignIn()
 
-
 // Utility functions
 export function parseJwt(token) {
     try {
@@ -18,11 +17,26 @@ export function parseJwt(token) {
     }
 }
 
-export function updateCreditDisplay() {
+// Update the updateCreditDisplay function
+export async function updateCreditDisplay() {
     const creditCountElement = document.getElementById('creditCount');
     if (creditCountElement) {
-        const credits = localStorage.getItem('userCredits') || '0';
-        creditCountElement.textContent = credits;
+        const userId = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).sub : null;
+        if (userId) {
+            try {
+                const res = await fetch(`/api/user-credits/${userId}`);
+                const { credits } = await res.json();
+                localStorage.setItem('userCredits', credits);
+                creditCountElement.textContent = credits;
+            } catch (err) {
+                console.error('Failed to fetch credits:', err);
+                const credits = localStorage.getItem('userCredits') || '0';
+                creditCountElement.textContent = credits;
+            }
+        } else {
+            const credits = localStorage.getItem('userCredits') || '0';
+            creditCountElement.textContent = credits;
+        }
     }
 }
 
@@ -33,12 +47,11 @@ export function renderAuthUI() {
     const userDropdown = document.querySelector('.user-dropdown');
     const creditsDisplay = document.querySelector('.credits-display');
     const creditCountElement = document.getElementById('creditCount');
-  if (creditCountElement) {
-    // If unset or invalid, default to 5
-    let credits = parseInt(localStorage.getItem('userCredits'), 10);
-    if (isNaN(credits)) credits = 5;
-    creditCountElement.textContent = credits;
-  }
+    if (creditCountElement) {
+        let credits = parseInt(localStorage.getItem('userCredits'), 10);
+        if (isNaN(credits)) credits = 5;
+        creditCountElement.textContent = credits;
+    }
     if (googleSignInButton) googleSignInButton.classList.toggle('hidden', isLoggedIn);
     if (userDropdown) userDropdown.classList.toggle('hidden', !isLoggedIn);
     if (creditsDisplay) creditsDisplay.classList.toggle('hidden', !isLoggedIn);
@@ -73,11 +86,13 @@ export function setupUserDropdown() {
 
     if (logoutButton) {
         logoutButton.addEventListener('click', () => {
-            localStorage.removeItem('user');
+            localStorage.removeItem('userId');
             localStorage.removeItem('isLoggedIn');
             localStorage.removeItem('googleAuthToken');
             renderAuthUI();
             document.querySelector('.dropdown-menu')?.classList.remove('show');
+            // Redirect to landing page after logout
+            window.location.href = 'index.html';
         });
     }
 }
@@ -98,28 +113,31 @@ export function setupGoogleButton() {
         return;
     }
 
-    // Initialize Google Auth
     google.accounts.id.initialize({
         client_id: '969099711725-hldrjpjo3le920chng1ethgbbc71vald.apps.googleusercontent.com',
         callback: handleCredentialResponse,
         ux_mode: 'popup'
     });
 
-    // Render main sign-in button
     const mainBtn = document.getElementById('googleSignInButton');
-    if (mainBtn) {
+     if (mainBtn) {
+        const isMobile = window.matchMedia('(max-width: 768px)').matches;
+        
         google.accounts.id.renderButton(mainBtn, {
             theme: 'outline',
             size: 'large',
-            text: 'signin',
+            text:  'signin',
             shape: 'pill',
+            width: isMobile ? '120px' : '200px'
         });
     }
 
-    // Render any AI-trigger buttons
     const aiIds = [
         'aiSigninButton','aiSigninButton1','aiSigninButton2',
-        'aiSigninButton3','aiSigninButton4','aiSigninButton5'
+        'aiSigninButton3','aiSigninButton4','aiSigninButton5', 
+        'aiSigninButton6','aiSigninButton7','aiSigninButton8',
+        'aiSigninButton9','aiSigninButton10','aiSigninButton11',
+        'aiSigninButton12','aiSigninButton13'
     ];
     aiIds.forEach(id => {
         const btn = document.getElementById(id);
@@ -133,49 +151,40 @@ export function setupGoogleButton() {
     });
 }
 
-function handleCredentialResponse(resp) {
+export async function handleCredentialResponse(resp) {
     const user = parseJwt(resp.credential);
+    localStorage.setItem('userId', user.sub); // ✅ Add this!
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('isLoggedIn', 'true');
     localStorage.setItem('googleAuthToken', resp.credential);
   
-    // Set default credits to 5 if not already set
-    if (!localStorage.getItem('userCredits')) {
-      localStorage.setItem('userCredits', '5');
-    }
-  
-    // Fetch initial (or updated) credits, then render + redirect
-    fetch(`/api/user-credits/${user.sub}`)
-      .then(r => r.json())
-      .then(data => {
-        // If user doesn't exist in DB yet, initialize with 5 credits
-        if (data.credits === undefined || data.credits === null) {
-          return fetch('/api/update-credits', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              userId: user.sub, 
-              amount: 5 
-            })
-          });
+    try {
+        const r1 = await fetch(`/api/user-credits/${user.sub}`);
+        const { credits: serverCredits } = await r1.json();
+
+        let credits;
+        if (serverCredits == null) {
+            const r2 = await fetch('/api/update-credits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.sub, amount: 5 })
+            });
+            const json2 = await r2.json();
+            credits = json2.credits;
         } else {
-          // Update local storage with server value
-          localStorage.setItem('userCredits', data.credits);
-          return Promise.resolve();
+            credits = serverCredits;
         }
-      })
-      .then(() => {
-        renderAuthUI();
-        if (window.location.pathname.includes('index.html')) {
-          window.location.href = 'dashboard.html';
-        }
-      })
-      .catch(err => {
-        console.error('Error fetching credits:', err);
-        renderAuthUI();
-      });
-}
   
+        localStorage.setItem('userCredits', credits);
+        renderAuthUI();
+  
+        // Redirect to dashboard after successful sign-in
+        window.location.href = 'dashboard.html';
+    } catch (err) {
+        console.error('Error in credential response:', err);
+        renderAuthUI();
+    }
+}
 
 // Credit management
 export async function checkUserCredits(userId) {
@@ -185,20 +194,44 @@ export async function checkUserCredits(userId) {
     return credits;
 }
 
+// Add this function
+export function setupCreditPolling() {
+  const userId = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).sub : null;
+  if (!userId) return;
+
+  async function pollCredits() {
+    try {
+      const res = await fetch(`/api/user-credits/${userId}`);
+      const { credits } = await res.json();
+      localStorage.setItem('userCredits', credits);
+      updateCreditDisplay();
+    } catch (err) {
+      console.error('Polling error:', err);
+    } finally {
+      setTimeout(pollCredits, 10000); // Poll every 10 seconds
+    }
+  }
+
+  pollCredits();
+}
+
+
+
+
 export async function deductCredit(userId, amount = 1) {
     const res = await fetch('/api/update-credits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, amount: -amount })
+        body: JSON.stringify({ userId, amount: -Math.abs(amount) })
     });
-    if (res.ok) {
-        const newCount = parseInt(localStorage.getItem('userCredits')||'0') - amount;
-        localStorage.setItem('userCredits', newCount);
-        updateCreditDisplay();
-        return true;
+    if (!res.ok) {
+        console.error('Failed to deduct credits:', await res.text());
+        return false;
     }
-    console.error('Failed deduct', await res.text());
-    return false;
+    const { credits } = await res.json();
+    localStorage.setItem('userCredits', credits);
+    updateCreditDisplay();
+    return true;
 }
 
 window.setupGoogleButton = setupGoogleButton;
@@ -207,5 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderAuthUI();
     protectPage();
     setupUserDropdown();
-    // ← no more setupGoogleButton() here
+    setupCreditPolling(); // 👈 the new polling version
+
+    window.addEventListener('popstate', updateCreditDisplay);
 });

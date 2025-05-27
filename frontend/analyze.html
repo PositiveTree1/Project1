@@ -2,20 +2,55 @@
 <html lang="en">
   <head>
     <link rel="icon" type="image/png" href="assets/chatPhantom.png">
-  
-    <!-- 1) Inline helper to call setupGoogleButton once GSI is ready -->
-    <script>
-      function initGoogleSignIn() {
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', () => {
-            window.setupGoogleButton();
-          });
-        } else {
-          window.setupGoogleButton();
-        }
-      }
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module">
+      import { getAnalysisHTML } from './scripts/api.js';
+      import { restoreAllCharts } from './scripts/analysis/restoreCharts.js';
+    
+
+      document.addEventListener('DOMContentLoaded', async () => {
+    const id = new URLSearchParams(window.location.search).get('id');
+    if (!id) {
+        return;
+    }
+
+    try {
+        const { analysisData } = await getAnalysisHTML(id);
+        const { html, metadata } = analysisData;
+
+        // Inject all saved HTML
+        document.getElementById('results').innerHTML = html;
+
+        // Rebuild charts from metadata
+        restoreAllCharts(metadata.charts);
+
+        // Scroll to the results section after a small delay
+        setTimeout(() => {
+            const resultsSection = document.getElementById('results');
+            if (resultsSection) {
+                resultsSection.scrollIntoView({ behavior: 'smooth' });
+            }
+        }, 100);
+
+    } catch (err) {
+        console.error('Failed to load analysis:', err);
+        document.getElementById('results').textContent = 'Failed to load analysis.';
+    }
+});
     </script>
-  
+
+    <script>
+  function initGoogleSignIn() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        window.setupGoogleButton();
+      });
+    } else {
+      window.setupGoogleButton();
+    }
+  }
+</script>
+      
     <!-- 2) Load GSI client -->
     <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
   
@@ -27,27 +62,14 @@
     <link rel="stylesheet" href="styles/analysis.css">
   
     <script type="module" src="/scripts/authCheck.js"></script>
-
+    
+    
 
 
   </head>
-  <script type="module">
-    import { getAnalysisHTML } from './scripts/api.js';
   
-    document.addEventListener('DOMContentLoaded', async () => {
-      const params = new URLSearchParams(window.location.search);
-      const chatId = params.get('chatId');
-      if (!chatId) return;
   
-      try {
-        const { html } = await getAnalysisHTML(chatId);
-        document.getElementById('results').innerHTML = html;
-      } catch (err) {
-        console.error('Failed to load saved analysis:', err);
-        document.getElementById('results').textContent = 'Could not load analysis.';
-      }
-    });
-  </script>
+
 <body class="analysis-page">
   <nav class="navbar">
     <div class="navbar-container">
@@ -59,10 +81,13 @@
       </a>
       <div class="auth-container">
         <!-- hidden by default until renderAuthUI shows them -->
-      <div class="credits-display hidden">
-        <img src="assets/credit5.png" alt="Credits" class="credit-icon">
-        <span id="creditCount">0</span>
-      </div>
+      <a href="credits.html" class="credits-link">
+        <div class="credits-display hidden" id="creditsContainer">
+          <img src="assets/credit5.png" alt="Credits" class="credit-icon">
+          <span id="creditCount">0</span>
+        </div>
+      </a>
+
 
       <div id="gSignInWrapper">
         <!-- Google button is visible until logged in -->
@@ -119,27 +144,15 @@
         <div class="options-container">
           <!-- AI Toggle -->
           <div id="aiToggleContainer" class="option-group ai-toggle-container">
-            <span class="option-label">AI Analysis</span>
             <label class="ai-toggle-button">
               <input type="checkbox" id="aiToggle" checked>
               <span class="slider">
-                <span class="text on">ON</span>
+                <span class="text on">AI</span>
                 <span class="text off">OFF</span>
               </span>
             </label>
           </div>
-          
-          <!-- Date Format Selector -->
-          <div class="option-group">
-            
-            <div class="custom-select">
-              <select id="regionSelect">
-                <option value="EU">EU (DD/MM/YYYY)</option>
-                <option value="US">US (MM/DD/YYYY)</option>
-              </select>
-              <div class="select-arrow">▼</div>
-            </div>
-          </div>
+        
           
           <!-- Guide Button -->
           <div class="option-group guide-option">
@@ -165,25 +178,25 @@
             <div class="step-number">2</div>
             <div class="step-content">
               <h3>Export the chat</h3>
-              <p>Tap ⋮ (Android) or the chat name (iOS) > More > Export chat</p>
+              <p>Tap ⋮ (Android) or the chat name (iOS) > More (Android) or scroll down (iOS) > Export chat</p>
             </div>
           </div>
           <div class="guide-step">
             <div class="step-number">3</div>
             <div class="step-content">
               <h3>Choose to export without media</h3>
-              <p>Select "Without Media" to get a smaller file</p>
+              <p>Select "Without Media", and save to files</p>
             </div>
           </div>
           <div class="guide-step">
             <div class="step-number">4</div>
             <div class="step-content">
               <h3>Upload the file here</h3>
-              <p>Use the button above to select your exported .txt file</p>
+              <p>Use the button above to select your exported file</p>
             </div>
           </div>
           <div class="guide-note">
-            <p>🔒 Your chat data never leaves your device and isn't stored permanently</p>
+            <p>🔒 Your chat data is processed locally and securely using trusted services.</p>
           </div>
         </div>
       </div>
@@ -247,7 +260,6 @@
   <script type="module" src="scripts/analysis/fileProcessor.js"></script>
   <script src="scripts/analysis/chartRenderer.js"></script>
   <script type="module" src="scripts/analysis/parallax.js"></script>
-  <script src="scripts/authCheck.js"></script>
 <script>
     if (window.location.pathname.includes('dashboard.html')) {
         document.write('<script src="scripts/dashboard.js"><\/script>');
@@ -266,6 +278,21 @@
     });
   });
 </script>
-
+<!-- Consent Popup -->
+<div id="consentPopup" class="consent-popup hidden">
+  <div class="consent-content">
+    <h3>AI Analysis Consent</h3>
+    <p>To provide AI-powered insights, your chat will be securely sent to an AI for processing. The content will be:</p>
+    <ul>
+      <li>Used solely for this analysis</li>
+      <li>Deleted immediately after processing</li>
+    </ul>
+    <p>Your chat history is never stored on our servers.</p>
+    <div class="consent-buttons">
+      <button id="declineConsent" class="consent-button decline">Decline</button>
+      <button id="agreeConsent" class="consent-button agree">I Understand & Agree</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

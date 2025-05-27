@@ -17,5 +17,6 @@ function startTextRotation() {
 
 document.addEventListener('DOMContentLoaded', () => {
     startTextRotation();
+    setupUserDropdown();
     // Auth functions are already initialized in authCheck.js
 });

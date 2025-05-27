@@ -68,6 +68,8 @@ function renderStackedColumnChart(columnChartData, callback) {
         }
     }
 
+    
+
     // Clear any existing content (already done above)
     columnChartDiv.innerHTML = "";
     
@@ -104,9 +106,14 @@ function renderStackedColumnChart(columnChartData, callback) {
         }
     };
 
+    if (window._existingCharts) {
+        window._existingCharts.forEach(chart => chart.destroy());
+    }
+    window._existingCharts = [];
+
     // Create the Chart.js line chart with no legend
     const ctx = canvas.getContext("2d");
-    new Chart(ctx, {
+    const chart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
@@ -161,8 +168,129 @@ function renderStackedColumnChart(columnChartData, callback) {
         }
     });
 
-    // Invoke the callback (if provided) once the chart is rendered
-    if (callback) callback();
+    if (window.timelineChart) window.timelineChart.destroy();
+        window.timelineChart = chart;
+
+        // Prepare config for saving
+        window._savedChartConfigs = window._savedChartConfigs || {};
+        window._savedChartConfigs.timeline = {
+            type: chart.config.type,
+            data: chart.config.data,
+            options: chart.config.options
+        };
+
+        // Verify chart creation
+        console.log('Chart created successfully:', chart);
+        if (callback) callback();
+    
+}
+
+function renderMonthlyChartChartJS(monthlyData) {
+    // Compute overall total per month (sum of all sender values)
+    const overallData = monthlyData.map(dp => {
+        let sum = Object.keys(dp)
+            .filter(key => key !== "month")
+            .reduce((acc, key) => acc + dp[key], 0);
+        return { month: dp.month, total: sum };
+    });
+
+    const timelineSection = document.getElementById("timelineSection");
+    
+    // Create container for Monthly chart
+    const monthlyCard = document.createElement('div');
+    monthlyCard.className = 'chart-card';
+    timelineSection.appendChild(monthlyCard);
+    
+    // Add title
+    const monthlyTitle = document.createElement('h2');
+    monthlyTitle.className = 'chart-card-title';
+    monthlyTitle.textContent = 'Monthly Activity';
+    monthlyCard.appendChild(monthlyTitle);
+    
+    // Create chart container
+    const monthlyChartDiv = document.createElement('div');
+    monthlyChartDiv.id = 'monthlychartdiv';
+    monthlyCard.appendChild(monthlyChartDiv);
+
+    // Create and append canvas for Chart.js
+    const canvas = document.createElement('canvas');
+    monthlyChartDiv.appendChild(canvas);
+
+    // Prepare chart data using overallData
+    const labels = overallData.map(dp => dp.month);
+    const dataValues = overallData.map(dp => dp.total);
+
+    // Create the Chart.js line chart
+    const ctx = canvas.getContext("2d");
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '', // No legend label
+                data: dataValues,
+                borderColor: "#a044ff", // --secondary-color
+                backgroundColor: "rgba(106, 48, 147, 0.1)", // --primary-color with 10% opacity
+                borderWidth: 3,
+                tension: 0.3,
+                pointRadius: 0, // Remove data points
+                borderCapStyle: 'round',
+                borderJoinStyle: 'round',
+                fill: {
+                    target: 'origin',
+                    above: "rgba(106, 48, 147, 0.1)" // --primary-color with 10% opacity
+                }
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false // Hide legend
+                },
+                tooltip: {
+                    backgroundColor: '#6a3093', // --primary-color
+                    titleColor: '#fff',
+                    bodyColor: '#f3e5ff', // --accent-color
+                    borderColor: '#a044ff', // --secondary-color
+                    borderWidth: 1
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: { display: false },
+                    grid: { 
+                        display: false,
+                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
+                    },
+                    ticks: {
+                        color: '#6a3093' // --primary-color
+                    }
+                },
+                y: {
+                    display: true,
+                    title: { display: false },
+                    grid: { 
+                        display: false,
+                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
+                    },
+                    ticks: {
+                        color: '#6a3093' // --primary-color
+                    },
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    window._savedChartConfigs.monthly = {
+        type:    chart.config.type,
+        data:    chart.config.data,
+        options: chart.config.options
+      };
+      
+      return chart;
 }
 
 
@@ -206,9 +334,14 @@ function renderHourlyChart(hourlyData) {
     const labels = averageHourlyData.map(dp => dp.hour);
     const dataValues = averageHourlyData.map(dp => dp.average);
 
+    if (window._existingCharts) {
+        window._existingCharts.forEach(chart => chart.destroy());
+    }
+    window._existingCharts = [];
+
     // Create the Chart.js line chart
     const ctx = canvas.getContext("2d");
-    new Chart(ctx, {
+    const chart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
@@ -280,6 +413,13 @@ function renderHourlyChart(hourlyData) {
             }
         }
     });
+    window._savedChartConfigs.hourly = {
+        type:    chart.config.type,
+        data:    chart.config.data,
+        options: chart.config.options
+      };
+      return chart;
+
 }
 
 
@@ -322,7 +462,7 @@ function renderWeekdayChart(weekdayData) {
 
     // Create the Chart.js line chart with your color scheme
     const ctx = canvas.getContext("2d");
-    new Chart(ctx, {
+    const chart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
@@ -399,6 +539,12 @@ function renderWeekdayChart(weekdayData) {
             }
         }
     });
+    window._savedChartConfigs.weekday = {
+        type:    chart.config.type,
+        data:    chart.config.data,
+        options: chart.config.options
+      };
+      return chart;
 }
 
 
@@ -620,66 +766,6 @@ function renderChatAnalyticsTitle() {
     chatAnalyticsSection.insertAdjacentElement("afterbegin", titleElement);
 }
   
-// In chartRenderer.js - modify renderConversationAnalysis
-function renderConversationAnalysis(conversationStarts, conversationEnds) {
-    const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
-
-    // Remove any existing Conversation Analysis section
-    let convAnalysisSection = document.getElementById("conversationAnalysisSection");
-    if (convAnalysisSection) {
-        convAnalysisSection.remove();
-    }
-
-    // Create a new container for Conversation Analysis
-    convAnalysisSection = document.createElement("div");
-    convAnalysisSection.id = "conversationAnalysisSection";
-    chatAnalyticsSection.appendChild(convAnalysisSection);
-
-    // Add the "Conversation Analysis" title
-    const convTitle = document.createElement("h2");
-    convTitle.className = "title main-title";
-    convTitle.textContent = "Conversation Analysis";
-    convAnalysisSection.appendChild(convTitle);
-
-    // Create the white container for "Who started the most conversations?"
-    const startedContainer = document.createElement("div");
-    startedContainer.className = "conversation-stats-container";
-    convAnalysisSection.appendChild(startedContainer);
-
-    // Build the "Who started the most conversations?" content
-    let startedHTML = '<div class="conversation-stats">';
-    startedHTML += '<p class="stat-summary">Who started the most conversations?</p>';
-    startedHTML += '<ul class="conversation-list">';
-    for (const sender in conversationStarts) {
-        startedHTML += `<li><strong>${sender}:</strong> ${conversationStarts[sender]} times</li>`;
-    }
-    startedHTML += '</ul>';
-
-    startedHTML += '</div>';
-
-    startedContainer.innerHTML = startedHTML;
-
-    // Create the white container for "Who ended the most conversations?" (only if there are exactly two people)
-    if (Object.keys(conversationEnds).length === 2) {
-        const endedContainer = document.createElement("div");
-        endedContainer.className = "conversation-stats-container";
-        endedContainer.style.marginTop = "20px";
-        convAnalysisSection.appendChild(endedContainer);
-
-        // Build the "Who ended the most conversations?" content
-        let endedHTML = '<div class="conversation-stats">';
-        endedHTML += '<p class="stat-summary">Who ended the most conversations?</p>';
-        endedHTML += '<ul class="conversation-list">';
-        for (const sender in conversationEnds) {
-            endedHTML += `<li><strong>${sender}:</strong> ${conversationEnds[sender]} times</li>`;
-        }
-        endedHTML += '</ul>';
-
-        endedHTML += '</div>';
-
-        endedContainer.innerHTML = endedHTML;
-    }
-}
 
 function renderPersonSelectionPanel(people) {
     // Save the full list globally
@@ -896,7 +982,7 @@ function renderChatFocusChart(percentages, senders) {
     // Add the title (styled as a subtitle)
     const title = document.createElement("h2");
     title.className = "title subtitle";
-    title.textContent = "Chat Focus";
+    title.textContent = "Who the chat focuses on the most";
     chatFocusContainer.appendChild(title);
 
     // Create the chart container
@@ -931,7 +1017,7 @@ function renderChatFocusChart(percentages, senders) {
 
     // Create the Chart.js donut chart
     const ctx = canvas.getContext("2d");
-    new Chart(ctx, {
+    const chart = new Chart(ctx, {
         type: 'doughnut',
         data: data,
         options: {
@@ -965,6 +1051,15 @@ function renderChatFocusChart(percentages, senders) {
         labelDiv.appendChild(nameSpan);
         labelsContainer.appendChild(labelDiv);
     });
+        // save just the serializable bits:
+        window._savedChartConfigs = window._savedChartConfigs || {};
+        window._savedChartConfigs.chatFocus = {
+          type:    chart.config.type,
+          data:    chart.config.data,
+          options: chart.config.options
+        };
+      
+        return chart;
 }
 
 function renderContentAnalysis(contentStats) {
@@ -1052,6 +1147,17 @@ function renderContentAnalysis(contentStats) {
 }
 
 function renderInteractions(interactions) {
+
+    const senders = Object.keys(interactions);
+    if (senders.length <= 2) {
+        // Remove section if it exists
+        const interactionsSection = document.getElementById("interactionsSection");
+        if (interactionsSection) {
+            interactionsSection.remove();
+        }
+        return;
+    }
+
     const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
 
     // Remove any existing Interactions section
@@ -1162,106 +1268,6 @@ function getColorForSender(sender, index) {
     return defaultColors[index % defaultColors.length];
 }
   
-function renderMonthlyChartChartJS(monthlyData) {
-    // Compute overall total per month (sum of all sender values)
-    const overallData = monthlyData.map(dp => {
-        let sum = Object.keys(dp)
-            .filter(key => key !== "month")
-            .reduce((acc, key) => acc + dp[key], 0);
-        return { month: dp.month, total: sum };
-    });
-
-    const timelineSection = document.getElementById("timelineSection");
-    
-    // Create container for Monthly chart
-    const monthlyCard = document.createElement('div');
-    monthlyCard.className = 'chart-card';
-    timelineSection.appendChild(monthlyCard);
-    
-    // Add title
-    const monthlyTitle = document.createElement('h2');
-    monthlyTitle.className = 'chart-card-title';
-    monthlyTitle.textContent = 'Monthly Activity';
-    monthlyCard.appendChild(monthlyTitle);
-    
-    // Create chart container
-    const monthlyChartDiv = document.createElement('div');
-    monthlyChartDiv.id = 'monthlychartdiv';
-    monthlyCard.appendChild(monthlyChartDiv);
-
-    // Create and append canvas for Chart.js
-    const canvas = document.createElement('canvas');
-    monthlyChartDiv.appendChild(canvas);
-
-    // Prepare chart data using overallData
-    const labels = overallData.map(dp => dp.month);
-    const dataValues = overallData.map(dp => dp.total);
-
-    // Create the Chart.js line chart
-    const ctx = canvas.getContext("2d");
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '', // No legend label
-                data: dataValues,
-                borderColor: "#a044ff", // --secondary-color
-                backgroundColor: "rgba(106, 48, 147, 0.1)", // --primary-color with 10% opacity
-                borderWidth: 3,
-                tension: 0.3,
-                pointRadius: 0, // Remove data points
-                borderCapStyle: 'round',
-                borderJoinStyle: 'round',
-                fill: {
-                    target: 'origin',
-                    above: "rgba(106, 48, 147, 0.1)" // --primary-color with 10% opacity
-                }
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false // Hide legend
-                },
-                tooltip: {
-                    backgroundColor: '#6a3093', // --primary-color
-                    titleColor: '#fff',
-                    bodyColor: '#f3e5ff', // --accent-color
-                    borderColor: '#a044ff', // --secondary-color
-                    borderWidth: 1
-                }
-            },
-            scales: {
-                x: {
-                    display: true,
-                    title: { display: false },
-                    grid: { 
-                        display: false,
-                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
-                    },
-                    ticks: {
-                        color: '#6a3093' // --primary-color
-                    }
-                },
-                y: {
-                    display: true,
-                    title: { display: false },
-                    grid: { 
-                        display: false,
-                        color: 'rgba(106, 48, 147, 0.1)' // --primary-color with 10% opacity
-                    },
-                    ticks: {
-                        color: '#6a3093' // --primary-color
-                    },
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-}
 
 
 function renderCallStats() {
@@ -1335,41 +1341,34 @@ function renderCallStats() {
 }
 
 function renderConvoStats() {
-    // Only render if there are exactly two people and stats are available.
     const people = Object.keys(window.stats || {});
     if (people.length !== 2 || !window.convoStats) return;
 
     const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
     if (!chatAnalyticsSection) return;
 
-    // Remove any existing stats section.
     let convoStatsSection = document.getElementById("convoStatsSection");
     if (convoStatsSection) convoStatsSection.remove();
 
-    // Create a new container.
     convoStatsSection = document.createElement("div");
     convoStatsSection.id = "convoStatsSection";
     convoStatsSection.className = "conversation-stats-container";
     chatAnalyticsSection.appendChild(convoStatsSection);
 
-    // Title.
     const title = document.createElement("h2");
     title.className = "title subtitle";
     title.textContent = "Conversation Stats";
     convoStatsSection.appendChild(title);
 
-    // Stats container.
     const statsContainer = document.createElement("div");
     statsContainer.className = "conversation-stats";
     convoStatsSection.appendChild(statsContainer);
 
-    // Display overall average conversation length.
     const avgLength = document.createElement("p");
     avgLength.className = "convo-stat";
     avgLength.textContent = `Average conversation length: ${window.convoStats.averageLength} messages`;
     statsContainer.appendChild(avgLength);
 
-    // Display frequency and percentage change.
     const freq = document.createElement("p");
     freq.className = "convo-stat";
     
@@ -1379,19 +1378,19 @@ function renderConvoStats() {
     
     switch(window.convoStats.trend) {
         case "up":
-            freq.innerHTML = `Conversations in past 30 days: <span class="trend-value trend-up">▲${Math.abs(changeValue)}% increase</span>`;
+            freq.innerHTML = `Messages in past 30 days: <span class="trend-value trend-up">▲${Math.abs(changeValue)}% increase</span>`;
             break;
         case "down":
-            freq.innerHTML = `Conversations in past 30 days: <span class="trend-value trend-down">▼${Math.abs(changeValue)}% decrease</span>`;
+            freq.innerHTML = `Messages in past 30 days: <span class="trend-value trend-down">▼${Math.abs(changeValue)}% decrease</span>`;
             break;
         case "equal":
-            freq.innerHTML = `Conversations in past 30 days: <span class="trend-value trend-neutral">0% change</span> (${last30} vs ${prev30})`;
+            freq.innerHTML = `Messages in past 30 days: <span class="trend-value trend-neutral">0% change</span> (${last30} vs ${prev30})`;
             break;
         case "none":
-            freq.textContent = "No recent conversations";
+            freq.textContent = "No recent messages";
             break;
         default:
-            freq.textContent = `Conversation frequency: ${last30} in last 30 days`;
+            freq.textContent = `Message frequency: ${last30} in last 30 days`;
     }
     
     statsContainer.appendChild(freq);
@@ -1450,7 +1449,7 @@ function renderEngagementChart(engagementData, senders) {
 
     // Create the Chart.js donut chart
     const ctx = canvas.getContext("2d");
-    new Chart(ctx, {
+    const chart = new Chart(ctx, {
         type: 'doughnut',
         data: data,
         options: {
@@ -1483,6 +1482,14 @@ function renderEngagementChart(engagementData, senders) {
         labelDiv.appendChild(nameSpan);
         labelsContainer.appendChild(labelDiv);
     });
+    window._savedChartConfigs = window._savedChartConfigs || {};
+  window._savedChartConfigs.engagement = {
+    type:    chart.config.type,
+    data:    chart.config.data,
+    options: chart.config.options
+  };
+
+  return chart;
 }
 
 function renderStreakStats(streakStats) {

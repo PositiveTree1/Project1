@@ -1,10 +1,119 @@
 import stopWords from '../../words/stopWords.js'; // Import the stop words list
 import swearWords from '../../words/words.js'; // Import the swear words list
 import { preprocessChatForAI, analyzeWithAI , preprocessGroupChat, analyzeGroupChatWithAI} from '../../aiProcessor.js';
-import { setupGoogleButton } from '../authCheck.js';
+import { setupGoogleButton, checkUserCredits, deductCredit } from '../authCheck.js';
+import { saveAnalysisHTML, updateAnalysisHTML } from '../api.js';
+
+
+// after your imports
+window._savedChartConfigs = {};
 
 
 let selectedFile = null;
+
+
+function getLocaleDateFormat() {
+    const testDate = new Date(2000, 0, 15); // January 15, 2000
+    const formatted = new Intl.DateTimeFormat(undefined, { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+    }).format(testDate);
+    const parts = formatted.split('/');
+    if (parts.length >= 2) {
+        if (parts[0] === '15') return 'EU'; // DD/MM/YYYY
+        if (parts[0] === '01') return 'US'; // MM/DD/YYYY
+    }
+    return 'EU'; // Default to EU if undetermined
+}
+
+// Detect chat format: 'bracket' (e.g., [03/05/2025, 10:19:20]) or 'android' (e.g., 03/05/2025, 10:19 -)
+function detectChatFormat(text) {
+    const lines = text.split('\n');
+    for (const line of lines) {
+        if (line.trim() === '') continue;
+        if (line.startsWith('[')) return 'bracket';
+        if (/^\d{1,2}\/\d{1,2}\/\d{4},/.test(line)) return 'android';
+    }
+    throw new Error('Unable to detect chat format');
+}
+
+// Helper function to check if timestamps are in increasing order
+function isIncreasing(timestamps) {
+    for (let i = 1; i < timestamps.length; i++) {
+        if (timestamps[i] < timestamps[i - 1]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function detectDateFormat(text, chatFormat) {
+    const lines = text.split('\n');
+    let regex;
+    if (chatFormat === 'bracket') {
+        regex = /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?/;
+    } else if (chatFormat === 'android') {
+        regex = /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?/;
+    } else {
+        throw new Error('Unknown chat format');
+    }
+
+    // First, try the number-based detection
+    for (const line of lines) {
+        const match = line.match(regex);
+        if (match) {
+            const num1 = parseInt(match[1], 10);
+            const num2 = parseInt(match[2], 10);
+            if (num1 > 12) return 'EU'; // Day > 12, must be DD/MM/YYYY
+            if (num2 > 12) return 'US'; // Month > 12, must be MM/DD/YYYY
+        }
+    }
+
+    // If ambiguous, test both formats with a sample
+    const sampleLines = lines.slice(0, 10);
+    const timestampsUS = [];
+    const timestampsEU = [];
+    for (const line of sampleLines) {
+        const match = line.match(regex);
+        if (match) {
+            const num1 = match[1];
+            const num2 = match[2];
+            const year = match[3];
+            const hour = match[4];
+            const minute = match[5];
+            const second = match[6] || '00';
+
+            // US format: MM/DD/YYYY
+            const monthUS = num1.padStart(2, '0');
+            const dayUS = num2.padStart(2, '0');
+            const dateUS = new Date(`${year}-${monthUS}-${dayUS}T${hour}:${minute}:${second}`);
+            if (!isNaN(dateUS.getTime())) {
+                timestampsUS.push(dateUS.getTime());
+            }
+
+            // EU format: DD/MM/YYYY
+            const dayEU = num1.padStart(2, '0');
+            const monthEU = num2.padStart(2, '0');
+            const dateEU = new Date(`${year}-${monthEU}-${dayEU}T${hour}:${minute}:${second}`);
+            if (!isNaN(dateEU.getTime())) {
+                timestampsEU.push(dateEU.getTime());
+            }
+        }
+    }
+
+    const isUSIncreasing = timestampsUS.length > 1 && isIncreasing(timestampsUS);
+    const isEUIncreasing = timestampsEU.length > 1 && isIncreasing(timestampsEU);
+
+    if (isUSIncreasing && !isEUIncreasing) {
+        return 'US';
+    } else if (isEUIncreasing && !isUSIncreasing) {
+        return 'EU';
+    } else {
+        // Fallback to locale if both work or neither does
+        return getLocaleDateFormat();
+    }
+}
 
 export function initFileProcessor() {
     const fileInput = document.getElementById('fileInput');
@@ -14,38 +123,83 @@ export function initFileProcessor() {
         document.getElementById('fileName').textContent = selectedFile.name;
     });
 }
-
-export function processSelectedFile() {
+export async function processSelectedFile() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const aiToggle = document.getElementById('aiToggle');
+    
     const fileInput = document.getElementById('fileInput');
-    // Try to get the file from the file input; if not available, use window.selectedFile
     const file = fileInput.files[0] || window.selectedFile;
     if (!file) {
         throw new Error('Please select a file first');
     }
-    const region = document.getElementById('regionSelect').value;
-    const reader = new FileReader();
+    
+    // First read the file to check if it's a group chat
+    const text = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => resolve(event.target.result);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        if (file.name.endsWith('.zip')) {
+            reader.readAsArrayBuffer(file);
+        } else {
+            reader.readAsText(file);
+        }
+    });
+    
+    // Process the file to get participant count
+    let processedText = text;
+    if (file.name.endsWith('.zip')) {
+        const zip = await JSZip.loadAsync(text);
+        const txtFile = Object.keys(zip.files).find((filename) => filename.endsWith('.txt'));
+        if (!txtFile) {
+            throw new Error('No .txt file found in the ZIP archive');
+        }
+        processedText = await zip.files[txtFile].async('text');
+    }
+    
+    const chatFormat = detectChatFormat(processedText);
+    const dateFormat = detectDateFormat(processedText, chatFormat);
+    const stats = processChatLog(processedText).stats;
+    const isGroupChat = Object.keys(stats).length > 2;
+    
+    if (!isGroupChat && user.sub && aiToggle?.checked) {
+        const needed = window.currentCreditsNeeded || 1;
+        const credits = await checkUserCredits(user.sub);
 
+        if (credits < needed) {
+            showNoCreditsPopup(needed, credits); // Pass values for better UX
+            return;
+        }
+    }
+
+    
+    // Now process the file normally
+    const reader = new FileReader();
     return new Promise((resolve, reject) => {
-        reader.onload = function(event) {
+        reader.onload = async function(event) {
             try {
                 let processingPromise;
                 if (file.name.endsWith('.zip')) {
                     processingPromise = processZipFile(event.target.result);
                 } else {
-                    processingPromise = Promise.resolve(processChatLogFile(event.target.result, region));
+                    processingPromise = Promise.resolve(processChatLogFile(event.target.result));
                 }
-                
-                processingPromise.then(() => {
-                    document.dispatchEvent(new Event('processingComplete'));
-                    resolve();
-                }).catch(reject);
+                processingPromise
+                    .then((result) => {
+                        if (result === false) {
+                            return resolve();
+                        }
+                        document.dispatchEvent(new Event('processingComplete'));
+                        resolve();
+                    })
+                    .catch((err) => {
+                        console.error('processSelectedFile unexpected error:', err);
+                        reject(err);
+                    });
             } catch (error) {
                 reject(error);
             }
         };
-
         reader.onerror = () => reject(new Error('Failed to read file'));
-
         if (file.name.endsWith('.zip')) {
             reader.readAsArrayBuffer(file);
         } else {
@@ -54,6 +208,102 @@ export function processSelectedFile() {
     });
 }
 
+function showAnalysisArrivingPopup() {
+    const popup = document.createElement("div");
+    popup.className = "ai-popup";
+    popup.innerHTML = `
+        <div class="ai-popup-content">
+            <div class="ai-popup-progress">
+                <div class="ai-popup-progress-bar"></div>
+            </div>
+            <div class="ai-popup-header">
+                <h3 class="ai-popup-title">AI Analysis Arriving</h3>
+                <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
+            </div>
+            <p class="ai-popup-message">Your deep AI chat analysis is going to appear shortly.</p>
+        </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Remove the popup after animation completes
+    setTimeout(() => {
+        if (popup.parentElement) {
+            popup.parentElement.removeChild(popup);
+        }
+    }, 3000);
+    
+    // Also remove when clicking outside
+    popup.addEventListener('click', (e) => {
+        if (e.target === popup) {
+            popup.remove();
+        }
+    });
+}
+
+function showChatTooShortPopup() {
+    const popup = document.createElement("div");
+    popup.className = "ai-popup";
+    popup.innerHTML = `
+        <div class="ai-popup-content">
+            <div class="ai-popup-progress">
+                <div class="ai-popup-progress-bar"></div>
+            </div>
+            <div class="ai-popup-header">
+                <h3 class="ai-popup-title">Chat Too Short</h3>
+                <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
+            </div>
+            <p class="ai-popup-message">Your chat is too short to analyze, please try again with a longer chat.</p>
+        </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Remove the popup after animation completes
+    setTimeout(() => {
+        if (popup.parentElement) {
+            popup.parentElement.removeChild(popup);
+        }
+    }, 3000);
+    
+    // Also remove when clicking outside
+    popup.addEventListener('click', (e) => {
+        if (e.target === popup) {
+            popup.remove();
+        }
+    });
+}
+
+function showNoCreditsPopup(needed = 1, current = 0) {
+  const popup = document.createElement("div");
+  popup.className = "ai-popup";
+  popup.innerHTML = `
+    <div class="ai-popup-content">
+      <div class="ai-popup-progress">
+        <div class="ai-popup-progress-bar2"></div>
+      </div>
+      <div class="ai-popup-header">
+        <h3 class="ai-popup-title">Not Enough Credits</h3>
+        <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
+      </div>
+      <p class="ai-popup-message">
+        You dont have enough credits to run the AI analysis, basic analysis will still be shown.
+      </p>
+      <p class="ai-popup-message">
+        Please <a href="/credits.html" style="color: #007BFF;">buy more credits</a> to continue.
+      </p>
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+  setTimeout(() => popup.remove(), 5000);
+  popup.addEventListener('click', e => {
+    if (e.target === popup) popup.remove();
+  });
+}
+
+
+  
 
 function processZipFile(arrayBuffer) {
     return JSZip.loadAsync(arrayBuffer).then((zip) => {
@@ -63,19 +313,81 @@ function processZipFile(arrayBuffer) {
         }
         return zip.files[txtFile].async('text');
     }).then((text) => {
-        return processChatLogFile(text, document.getElementById('regionSelect').value);
+        return processChatLogFile(text); // Remove the region parameter
     });
 }
 
-function processChatLogFile(text, region) {
-    // Initialize colors if not already initialized
-    if (!window.colors) {
-        window.colors = {};
-    }
+function showGroupChatNoAIPopup() {
+    const popup = document.createElement("div");
+    popup.className = "ai-popup";
+    popup.innerHTML = `
+        <div class="ai-popup-content">
+            <div class="ai-popup-progress">
+                <div class="ai-popup-progress-bar"></div>
+            </div>
+            <div class="ai-popup-header">
+                <h3 class="ai-popup-title">Group Chat Detected</h3>
+                <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
+            </div>
+            <p class="ai-popup-message">AI analysis is currently only available for chats with exactly two participants.</p>
+            <p class="ai-popup-message">You will not be charged</p>
+        </div>
+    `;
     
-    // Process data
-    const { stats, columnChartData, dateRange, hourlyData, hourlySenders, monthlyData, weekdayData, conversations } = processChatLog(text, region);
-    const callStats = analyzeCalls(text, region); // Separate call analysis
+    document.body.appendChild(popup);
+    
+    // Remove the popup after 5 seconds (longer than other popups)
+    setTimeout(() => {
+        if (popup.parentElement) {
+            popup.parentElement.removeChild(popup);
+        }
+    }, 5000);
+    
+    // Also remove when clicking outside
+    popup.addEventListener('click', (e) => {
+        if (e.target === popup) {
+            popup.remove();
+        }
+    });
+}
+
+
+function processChatLogFile(text) {
+    const result = processChatLog(text);
+    if (result === false) {
+        // too short → we already showed the popup → just stop here
+        return false;
+    }
+
+    const isGroupChat = Object.keys(result.stats).length > 2;
+    
+    if (isGroupChat) {
+        const aiToggle = document.getElementById('aiToggle');
+        if (aiToggle && aiToggle.checked) {
+            showGroupChatNoAIPopup();
+        }
+        
+    } else {
+        
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const aiToggle = document.getElementById('aiToggle');
+        if (user.sub && aiToggle?.checked) {
+            showAnalysisArrivingPopup();
+        }
+    }
+    // Initialize colors if not already initialized
+    if (!window.colors) window.colors = {};
+    const {
+        stats,
+        columnChartData,
+        dateRange,
+        hourlyData,
+        hourlySenders,
+        monthlyData,
+        weekdayData,
+        conversations
+    } = result;
+    const callStats = analyzeCalls(text);
     
     window.stats = stats;
     window.callStats = callStats; // Store call stats globally
@@ -83,18 +395,18 @@ function processChatLogFile(text, region) {
 
     window.chatText = text;
 
-    const { uniqueWords, topEmojis, longestMessage, topCommunalWords, topCommunalEmojis, averageWordsPerMessage, averageSwearWordsPerMessage } = calculateAdditionalStats(text, region);
-    const { conversationStarts, conversationEnds } = analyzeConversations(text, region);
+
+    const { uniqueWords, topEmojis, longestMessage, topCommunalWords, topCommunalEmojis, averageWordsPerMessage, averageSwearWordsPerMessage } = calculateAdditionalStats(text);
     // const ignoredCounts = analyzeIgnoredMessages(text, region);
-    const doubleMessageCounts = calculateDoubleMessages(text, region);
+    const doubleMessageCounts = calculateDoubleMessages(text);
     // const responseStats = calculateResponseTimes(text, region);
     const chatFocusPercentages = calculateChatFocus(text, Object.keys(stats));
-    const contentStats = analyzeContent(text, region);
-    const interactions = analyzeInteractions(text, region);
+    const contentStats = analyzeContent(text);
+    const interactions = analyzeInteractions(text);
 
-    window.convoStats = calculateConvoStats(text, region);
+    window.convoStats = calculateConvoStats(text);
 
-    const streakStats = calculateStreakStats(text, region);
+    const streakStats = calculateStreakStats(text);
     
 
     if (Object.keys(stats).length === 2) {
@@ -113,8 +425,7 @@ function processChatLogFile(text, region) {
     window.longestMessage = longestMessage;
     window.topCommunalWords = topCommunalWords;
     window.topCommunalEmojis = topCommunalEmojis;
-    window.conversationStarts = conversationStarts;
-    window.conversationEnds = conversationEnds;
+    
     window.averageWordsPerMessage = averageWordsPerMessage;
     window.averageSwearWordsPerMessage = averageSwearWordsPerMessage;
     // window.ignoredCounts = ignoredCounts;
@@ -138,45 +449,57 @@ function processChatLogFile(text, region) {
     
 
     // Render the stacked column chart, and when done, render the other charts
-    if (window.renderStackedColumnChart) {
-        renderStackedColumnChart(columnChartData, () => {
-            // Stacked column chart (now a curved line chart) has rendered.
-            // Now render the other charts:
+    renderStackedColumnChart(columnChartData, () => {
+        // Once timeline is drawn, draw the rest
             renderMonthlyChartChartJS(monthlyData);
             renderWeekdayChart(weekdayData);
-            if (window.renderHourlyChart) renderHourlyChart(hourlyData);
+            renderHourlyChart(hourlyData);
+            // Stacked column chart (now a curved line chart) has rendered.
+            // Now render the other charts:
+            
             if (window.renderPersonBoxes) renderPersonBoxes(stats, uniqueWords, topEmojis, longestMessage, window.colors || {});
             if (window.renderCommunalWords) renderCommunalWords(topCommunalWords);
             if (window.renderFloatingEmojis) renderFloatingEmojis(topCommunalEmojis);
 
-            if (window.renderConversationAnalysis) {
-                renderConversationAnalysis(conversationStarts, conversationEnds);
-            }
+            
 
             if (Object.keys(stats).length === 2) {
                 if (window.renderDoubleMessages) renderDoubleMessages(doubleMessageCounts);
-                if (window.renderChatFocusChart) renderChatFocusChart(chatFocusPercentages, Object.keys(stats));
             }
-
             if (window.renderContentAnalysis) {
                 renderContentAnalysis(contentStats);
             }
 
-            if (Object.keys(stats).length > 2 && window.renderInteractions) {
-                renderInteractions(interactions);
+            if (window.renderInteractions) {
+                if (Object.keys(stats).length > 2) {
+                    renderInteractions(interactions);
+                } else {
+                    // Remove interactions section if it exists for non-group chats
+                    const interactionsSection = document.getElementById("interactionsSection");
+                    if (interactionsSection) {
+                        interactionsSection.remove();
+                    }
+                }
             }
             if (window.renderCallStats) {
                 renderCallStats(callStats);
             }
             if (people.length === 2) {
-                renderConvoStats(text, region);
+                renderConvoStats(text);
             }
             if (Object.keys(stats).length === 2 && window.engagementData) {
-                if (window.renderEngagementChart) renderEngagementChart(window.engagementData, Object.keys(stats));
+                renderEngagementChart(engagementData, Object.keys(stats));
             }
 
             // Add this with the other render calls
             if (window.renderStreakStats) renderStreakStats(streakStats);
+
+            // … after your existing streakStats line
+            const ghostingStats = calculateGhostingStats(text);
+            window.ghostingStats = ghostingStats;    // make it globally available
+
+            const responseTimeStats = calculateResponseTimes(text);
+            window.responseTimeStats = responseTimeStats;
 
             if (people.length === 2) {
                 window.aiAnalysis = renderAIAnalysisSection();
@@ -186,13 +509,8 @@ function processChatLogFile(text, region) {
                     window.aiAnalysis.button.addEventListener('click', handleAIClick);
                 }
             } else if (people.length > 2) {
-                // New group chat AI analysis
                 window.aiAnalysis = renderGroupChatAIAnalysisSection();
-                
-                if (window.aiAnalysis?.button) {
-                    window.aiAnalysis.button.removeEventListener('click', handleGroupAIClick);
-                    window.aiAnalysis.button.addEventListener('click', handleGroupAIClick);
-                }
+                // No button exists, so no need to attach event listeners
             }
 
             document.dispatchEvent(new Event('processingComplete'));
@@ -204,152 +522,129 @@ function processChatLogFile(text, region) {
                     resultsSection.scrollIntoView({ behavior: 'smooth' });
                 }, 100);
             }
-              
-              
-        });
-    } else {
-        // Fallback if renderStackedColumnChart is not defined
-        renderMonthlyChartChartJS(monthlyData);
-        renderWeekdayChart(weekdayData);
-        if (window.renderHourlyChart) renderHourlyChart(hourlyData);
-        if (window.renderPersonBoxes) renderPersonBoxes(stats, uniqueWords, topEmojis, longestMessage, window.colors || {});
-        if (window.renderCommunalWords) renderCommunalWords(topCommunalWords);
-        if (window.renderFloatingEmojis) renderFloatingEmojis(topCommunalEmojis);
+            (async () => {
+            try {
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                if (!user.sub) return;
 
-        if (window.renderConversationAnalysis) {
-            renderConversationAnalysis(conversationStarts, conversationEnds);
-        }
+                const timelineHTML = document.getElementById('timelineSection').innerHTML;
+                const chatHTML     = document.getElementById('chatAnalyticsSection').innerHTML;
+                const html = `
+                    <section id="timelineSection">${timelineHTML}</section>
+                    <section id="chatAnalyticsSection">${chatHTML}</section>
+                `;
 
-        if (Object.keys(stats).length === 2) {
-            if (window.renderDoubleMessages) renderDoubleMessages(doubleMessageCounts);
-            // if (window.renderResponseTimes) renderResponseTimes(responseStats);
-            if (window.renderChatFocusChart) renderChatFocusChart(chatFocusPercentages, Object.keys(stats));
-        }
+                const metadata = {
+                    participants: Object.keys(window.stats),
+                    createdAt: new Date().toISOString(),
+                    charts: {
+                        timeline:    window._savedChartConfigs.timeline,
+                        hourly:      window._savedChartConfigs.hourly,
+                        monthly:     window._savedChartConfigs.monthly,
+                        weekday:     window._savedChartConfigs.weekday,
+                        chatFocus:   window._savedChartConfigs.chatFocus,
+                        engagement:  window._savedChartConfigs.engagement,
+                    }
+                };
 
-        if (window.renderContentAnalysis) {
-            renderContentAnalysis(contentStats);
-        }
+                
 
-        if (Object.keys(stats).length > 2 && window.renderInteractions) {
-            renderInteractions(interactions);
-        }
-        if (window.renderCallStats) {
-            renderCallStats(callStats);
-        }
-        if (people.length === 2) {
-            renderConvoStats(text, region);
-        }
+                const resp = await saveAnalysisHTML(user.sub, { html, metadata }, true);
+                window.currentAnalysisId = resp.id;
+                console.log('Analysis saved with ID =', resp.id);
 
-        if (Object.keys(stats).length === 2 && window.engagementData) {
-            if (window.renderEngagementChart) renderEngagementChart(window.engagementData, Object.keys(stats));
-        }
-        // Add this with the other render calls
-        if (window.renderStreakStats) renderStreakStats(streakStats);
+                // Show popup only if AI is not enabled
+                const aiToggle = document.getElementById('aiToggle');
+                if (!aiToggle?.checked && !window.skipSavedPopup) {
+                    showAnalysisSavedPopup();
+                }
 
-        // In your initialization code (where you process the chat)
-        if (people.length === 2) {
-            window.aiAnalysis = renderAIAnalysisSection();
-            
-            if (window.aiAnalysis?.button) {
-                window.aiAnalysis.button.removeEventListener('click', handleAIClick);
-                window.aiAnalysis.button.addEventListener('click', handleAIClick);
+            } catch (err) {
+                console.error('Could not save analysis HTML:', err);
             }
-        } else if (people.length > 2) {
-            // New group chat AI analysis
-            window.aiAnalysis = renderGroupChatAIAnalysisSection();
-            
-            if (window.aiAnalysis?.button) {
-                window.aiAnalysis.button.removeEventListener('click', handleGroupAIClick);
-                window.aiAnalysis.button.addEventListener('click', handleGroupAIClick);
-            }
-        }
+        })();
+    });
+    return true;
 
-        document.dispatchEvent(new Event('processingComplete'));
-        
-        // Scroll to results if needed
-        const resultsSection = document.getElementById('results');
-        if (resultsSection) {
-            setTimeout(() => {
-                resultsSection.scrollIntoView({ behavior: 'smooth' });
-            }, 100);
-        }
-          
-    }
-} 
+}
+
 
 window.initFileProcessor = initFileProcessor;
 window.processSelectedFile = processSelectedFile;
 
-function processChatLog(text, region) {
+function processChatLog(text) {
+    try {
+    // Detect chat and date formats
+    const chatFormat = detectChatFormat(text);
+    const dateFormat = detectDateFormat(text, chatFormat);
+    window.chatFormat = chatFormat;
+    window.dateFormat = dateFormat;
+
+    // Define regex based on chat format
+    let regex;
+    if (chatFormat === 'bracket') {
+        regex = /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/;
+    } else if (chatFormat === 'android') {
+        regex = /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
+    }
+
     const lines = text.split('\n');
     const stats = {};
     let startDate = null;
     let endDate = null;
     const messageCounts = {};
-
     let conversations = [];
     let currentConversation = [];
     let previousTimestamp = null;
-    const conversationGap = 40 * 60 * 1000; // 30 minutes in milliseconds
-    const messageGap = 10 * 60 * 1000; // 10 minutes in milliseconds
-    const minMessages = 16; // Minimum 4 messages (2 per participant)
+    const conversationGap = 40 * 60 * 1000; // 40 minutes
+    const minMessages = 16;
 
-    // Track days for hourly average and monthly days
     const allDays = new Set();
     const daysPerMonth = {};
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     monthNames.forEach(month => daysPerMonth[month] = new Set());
 
-    // Hourly stats (per sender)
     const hourlySenderStats = Array(24).fill(null).map(() => ({}));
     const hourlySendersSet = new Set();
 
-    // Monthly stats (per sender)
     const perMonthCounts = {};
     monthNames.forEach(month => perMonthCounts[month] = {});
 
-    // Weekday stats (per sender)
     const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const perWeekdayCounts = {};
     weekdayNames.forEach(day => perWeekdayCounts[day] = {});
 
-    // Media placeholders to exclude
     const mediaPlaceholders = [
-        "‎Voice call",
-        "‎Missed voice call",
-        "‎image omitted",
-        "‎GIF omitted",
-        "‎sticker omitted",
-        "‎video omitted",
-        "‎audio omitted",
-        "‎This message was deleted."
+        "‎Voice call", "‎Missed voice call", "‎image omitted", "‎GIF omitted",
+        "‎sticker omitted", "‎video omitted", "‎audio omitted", "‎This message was deleted."
     ];
 
-    lines.forEach(line => {
-        // Skip lines that contain media placeholders
-        if (mediaPlaceholders.some(placeholder => line.includes(placeholder))) {
-            return; // Skip this line
-        }
+    let validMessageCount = 0;
 
-        const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):\d{2}:\d{2}\] ([^:]+):/;
+    lines.forEach(line => {
+        if (mediaPlaceholders.some(placeholder => line.includes(placeholder))) return;
+
         const match = line.match(regex);
         if (match) {
-            const day = region === "US" ? match[2] : match[1];
-            const monthStr = region === "US" ? match[1] : match[2];
+            validMessageCount++;
+            const num1 = match[1];
+            const num2 = match[2];
             const year = match[3];
-            const hour = parseInt(match[4], 10);
-            const sender = match[5].trim();
-            const formattedDate = `${year}-${monthStr}-${day}`;
-            const monthNum = parseInt(monthStr, 10);
+            const hour = match[4];
+            const minute = match[5];
+            const second = match[6] || '00';
+            const sender = match[7].trim();
+
+            const day = dateFormat === 'US' ? num2.padStart(2, '0') : num1.padStart(2, '0');
+            const month = dateFormat === 'US' ? num1.padStart(2, '0') : num2.padStart(2, '0');
+            const formattedDate = `${year}-${month}-${day}`;
+            const timestamp = new Date(`${formattedDate}T${hour.padStart(2, '0')}:${minute}:${second.padStart(2, '0')}`);
+            const monthNum = parseInt(month, 10);
             const monthName = monthNames[monthNum - 1];
-            const dateObj = new Date(`${year}-${monthStr}-${day}`);
-            const dateObjConvo = new Date(`${year}-${monthStr}-${day}T${hour}:${match[5]}:${match[6]}`);
+            const dateObj = new Date(formattedDate);
             const weekdayName = weekdayNames[dateObj.getDay()];
 
-            // Check if we should start a new conversation
-            if (previousTimestamp && (dateObjConvo - previousTimestamp) > conversationGap) {
-                // Finalize current conversation if it meets criteria
+            if (previousTimestamp && (timestamp - previousTimestamp) > conversationGap) {
                 finalizeConversation(currentConversation, conversations, minMessages);
                 currentConversation = [];
             }
@@ -357,54 +652,51 @@ function processChatLog(text, region) {
             if (currentConversation.length >= 3) {
                 const lastThreeSenders = currentConversation.slice(-3).map(m => m.sender);
                 if (new Set(lastThreeSenders).size === 1) {
-                    // Remove the last messages that form a monologue
                     currentConversation = currentConversation.slice(0, -3);
-                    // Finalize what we have so far if it meets criteria
                     finalizeConversation(currentConversation, conversations, minMessages);
                     currentConversation = [];
                 }
             }
 
-            // Add message to current conversation
             currentConversation.push({
                 sender: sender,
-                timestamp: dateObjConvo,
-                text: line.split(": ").slice(1).join(": ") // Store message text
+                timestamp: timestamp,
+                text: line.split(": ").slice(1).join(": ")
             });
+            previousTimestamp = timestamp;
 
-            previousTimestamp = dateObjConvo;
-
-            // Update overall stats
             stats[sender] = (stats[sender] || 0) + 1;
-
-            // Track days for averages
             allDays.add(formattedDate);
             daysPerMonth[monthName].add(formattedDate);
-
-            // Update message counts per date (formatted as "YYYY-MM-DD")
             messageCounts[formattedDate] = messageCounts[formattedDate] || {};
             messageCounts[formattedDate][sender] = (messageCounts[formattedDate][sender] || 0) + 1;
-
-            // Update hourly sender stats
-            hourlySenderStats[hour][sender] = (hourlySenderStats[hour][sender] || 0) + 1;
+            hourlySenderStats[parseInt(hour)][sender] = (hourlySenderStats[parseInt(hour)][sender] || 0) + 1;
             hourlySendersSet.add(sender);
-
-            // Update monthly counts per sender
             perMonthCounts[monthName][sender] = (perMonthCounts[monthName][sender] || 0) + 1;
-
-            // Update weekday counts per sender
             perWeekdayCounts[weekdayName][sender] = (perWeekdayCounts[weekdayName][sender] || 0) + 1;
 
-            // Update date range
             if (!startDate || dateObj < startDate) startDate = dateObj;
             if (!endDate || dateObj > endDate) endDate = dateObj;
         }
     });
 
+    // Check if the chat is too short
+    const minDays = 30;
+    const minMessagesRequired = 100;
+    if (startDate && endDate) {
+      const daysDifference = (endDate - startDate) / (1000 * 60 * 60 * 24);
+      if (daysDifference < minDays || validMessageCount < minMessagesRequired) {
+        showChatTooShortPopup();
+        return false;    // ← stop here, no throw
+      }
+    } else {
+      showChatTooShortPopup();
+      return false;      // ← stop here, no throw
+    }
+
     const columnChartData = generateColumnChartData(messageCounts, startDate, endDate);
     const totalDays = allDays.size;
 
-    // Build hourly data with averages
     const hourlyData = [];
     for (let hour = 0; hour < 24; hour++) {
         const dataPoint = { hour: `${hour}:00` };
@@ -415,7 +707,6 @@ function processChatLog(text, region) {
         hourlyData.push(dataPoint);
     }
 
-    // Build monthly data with averages
     const monthlyData = monthNames.map(month => {
         const sendersInMonth = perMonthCounts[month];
         const daysInMonth = daysPerMonth[month].size;
@@ -426,10 +717,9 @@ function processChatLog(text, region) {
         return dataPoint;
     });
 
-    // Build weekday data with averages
     const weekdayData = weekdayNames.map(weekday => {
         const sendersInWeekday = perWeekdayCounts[weekday];
-        const daysInWeekday = Math.ceil(totalDays / 7); // Average days per weekday
+        const daysInWeekday = Math.ceil(totalDays / 7);
         const dataPoint = { weekday: weekday };
         for (const sender in sendersInWeekday) {
             dataPoint[sender] = daysInWeekday ? sendersInWeekday[sender] / daysInWeekday : 0;
@@ -438,6 +728,9 @@ function processChatLog(text, region) {
     });
 
     finalizeConversation(currentConversation, conversations, minMessages);
+
+    // Ensure window.stats is populated
+    window.stats = stats;
 
     return { 
         stats, 
@@ -449,7 +742,14 @@ function processChatLog(text, region) {
         weekdayData,
         conversations 
     };
+     } catch (err) {
+    console.error('processChatLog error:', err);
+    showChatTooShortPopup();
+    return false;
+  }
 }
+
+
 
 function finalizeConversation(conversation, conversations, minMessages) {
     if (conversation.length < minMessages) return;
@@ -498,8 +798,12 @@ function finalizeConversation(conversation, conversations, minMessages) {
     conversations.push(conversation);
 }
 
-function calculateAdditionalStats(text, region) {
+function calculateAdditionalStats(text) {
     const lines = text.split('\n');
+
+    const regex = window.chatFormat === 'bracket' 
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
     const uniqueWords = {}; // Track unique words per sender
     const wordCounts = {}; // Track word usage per sender
     const emojiCounts = {}; // Track emoji usage per sender
@@ -522,17 +826,13 @@ function calculateAdditionalStats(text, region) {
         "‎audio omitted",
     ];
 
+    
     lines.forEach(line => {
-        // Skip lines that contain media placeholders
-        if (mediaPlaceholders.some(placeholder => line.includes(placeholder))) {
-            return; // Skip this line
-        }
-
-        const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):\d{2}:\d{2}\] ([^:]+):/;
-        const match = line.match(regex);
-        if (match) {
-            const sender = match[5].trim();
-            const message = line.split(": ").slice(1).join(": "); // Extract the message part
+            if (mediaPlaceholders.some(placeholder => line.includes(placeholder))) return;
+            const match = line.match(regex);
+            if (match) {
+                const sender = match[7].trim();
+                const message = line.split(": ").slice(1).join(": ");
 
             // Track total messages per sender
             totalMessagesPerSender[sender] = (totalMessagesPerSender[sender] || 0) + 1;
@@ -587,7 +887,9 @@ function calculateAdditionalStats(text, region) {
             if (!longestMessage[sender] || wordCount > longestMessage[sender]) {
                 longestMessage[sender] = wordCount;
             }
-        }
+            }
+            
+        
     });
 
     // Calculate average words per message for each sender
@@ -632,176 +934,25 @@ function calculateAdditionalStats(text, region) {
     return { uniqueWords, topEmojis, longestMessage, topCommunalWords, topCommunalEmojis, averageWordsPerMessage, averageSwearWordsPerMessage };
 }
 
-function analyzeConversations(text, region) {
+
+
+function calculateDoubleMessages(text) {
     const lines = text.split('\n');
-    const conversationStarts = {};
-    const conversationEnds = {}; // Track who ended conversations
-    const conversationStartThreshold = 40 * 60 * 1000; // 40 minutes in milliseconds
-    const conversationMessageThreshold = 20 * 60 * 1000; // 20 minutes in milliseconds
-    const minMessagesForConversation = 7; // Minimum number of messages to count as a conversation
-    let previousTimestamp = null;
-
-    let currentConversation = []; // Track messages in the current conversation
-    let currentConversationStart = null; // Track the start time of the current conversation
-
-    // Use the same regex as before to extract the date and time.
-    const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\] ([^:]+):/;
-
-    lines.forEach(line => {
-        const match = line.match(regex);
-        if (match) {
-            // Extract date, time, and sender
-            const day = region === "US" ? match[2] : match[1];
-            const month = region === "US" ? match[1] : match[2];
-            const year = match[3];
-            const hour = match[4];
-            const minute = match[5];
-            const second = match[6];
-            const sender = match[7].trim();
-
-            // Convert to timestamp
-            const currentTimestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
-
-            // Check if the time gap exceeds the conversation start threshold (40 minutes)
-            if (!previousTimestamp || (currentTimestamp - previousTimestamp) > conversationStartThreshold) {
-                // End the previous conversation if it has at least 7 messages and all messages are within 20 minutes of each other
-                if (currentConversation.length >= minMessagesForConversation) {
-                    let isValidConversation = true;
-
-                    // Check if all messages in the conversation are within 20 minutes of each other
-                    for (let i = 1; i < currentConversation.length; i++) {
-                        if (currentConversation[i].timestamp - currentConversation[i - 1].timestamp > conversationMessageThreshold) {
-                            isValidConversation = false;
-                            break;
-                        }
-                    }
-
-                    if (isValidConversation) {
-                        const lastSender = currentConversation[currentConversation.length - 1].sender;
-                        conversationEnds[lastSender] = (conversationEnds[lastSender] || 0) + 1; // Increment the count for the last sender
-
-                        const firstSender = currentConversation[0].sender;
-                        conversationStarts[firstSender] = (conversationStarts[firstSender] || 0) + 1; // Increment the count for the sender who started the conversation
-                    }
-                }
-
-                // Start a new conversation
-                currentConversation = [];
-                currentConversationStart = currentTimestamp;
-            }
-
-            // Add the message to the current conversation
-            currentConversation.push({ sender, timestamp: currentTimestamp });
-
-            previousTimestamp = currentTimestamp;
-        }
-    });
-
-    // End the last conversation if it has at least 7 messages and all messages are within 20 minutes of each other
-    if (currentConversation.length >= minMessagesForConversation) {
-        let isValidConversation = true;
-
-        // Check if all messages in the conversation are within 20 minutes of each other
-        for (let i = 1; i < currentConversation.length; i++) {
-            if (currentConversation[i].timestamp - currentConversation[i - 1].timestamp > conversationMessageThreshold) {
-                isValidConversation = false;
-                break;
-            }
-        }
-
-        if (isValidConversation) {
-            const lastSender = currentConversation[currentConversation.length - 1].sender;
-            conversationEnds[lastSender] = (conversationEnds[lastSender] || 0) + 1;
-
-            const firstSender = currentConversation[0].sender;
-            conversationStarts[firstSender] = (conversationStarts[firstSender] || 0) + 1;
-        }
-    }
-
-    return { conversationStarts, conversationEnds };
-}
-
-// function analyzeIgnoredMessages(text, region) {
-//     const lines = text.split('\n');
-//     const ignoredCounts = {}; // Track how many times each sender was ignored
-//     const groupingThreshold = 3 * 60 * 1000; // 1 minute in milliseconds (for grouping messages)
-//     const ignoreThreshold = 40 * 60 * 1000; // 20 minutes in milliseconds (for ignoring messages)
-//     let previousSender = null; // Track the sender of the previous message
-//     let previousTimestamp = null; // Track the timestamp of the previous message
-//     let currentGroupStart = null; // Track the start of the current message group
-
-//     // Regex to extract date, time, and sender from each line
-//     const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\] ([^:]+):/;
-
-//     lines.forEach(line => {
-//         const match = line.match(regex);
-//         if (match) {
-//             // Extract date, time, and sender
-//             const day = region === "US" ? match[2] : match[1];
-//             const month = region === "US" ? match[1] : match[2];
-//             const year = match[3];
-//             const hour = match[4];
-//             const minute = match[5];
-//             const second = match[6];
-//             const sender = match[7].trim();
-
-//             // Convert to timestamp (in milliseconds)
-//             const currentTimestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
-
-//             // Check if the current message belongs to the same group as the previous message
-//             if (
-//                 previousSender === sender &&
-//                 currentTimestamp - previousTimestamp <= groupingThreshold
-//             ) {
-//                 // This message is part of the same group; do nothing
-//             } else {
-//                 // This message starts a new group
-//                 if (previousSender && currentTimestamp - previousTimestamp > ignoreThreshold) {
-//                     // The previous group was ignored
-//                     ignoredCounts[previousSender] = (ignoredCounts[previousSender] || 0) + 1;
-//                 }
-//                 // Start tracking the new group
-//                 currentGroupStart = currentTimestamp;
-//             }
-
-//             // Update previous sender and timestamp
-//             previousSender = sender;
-//             previousTimestamp = currentTimestamp;
-//         }
-//     });
-
-//     // Check if the last message group was ignored
-//     if (previousSender && Date.now() - previousTimestamp > ignoreThreshold) {
-//         ignoredCounts[previousSender] = (ignoredCounts[previousSender] || 0) + 1;
-//     }
-
-//     return ignoredCounts;
-// }
-
-function calculateDoubleMessages(text, region) {
-    const lines = text.split('\n');
-    const doubleMessageCounts = {}; // Track double messages per sender
-    let previousSender = null; // Track the sender of the previous message
-
-    // Regex to extract date, time, and sender from each line
-    const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\] ([^:]+):/;
-
+    const regex = window.chatFormat === 'bracket' 
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
+    let previousSender = null;
+    const doubleMessageCounts = {}; // Initialize the object
     lines.forEach(line => {
         const match = line.match(regex);
         if (match) {
             const sender = match[7].trim();
-
-            // Check if the current sender is the same as the previous sender
             if (sender === previousSender) {
-                // Increment the double message count for this sender
                 doubleMessageCounts[sender] = (doubleMessageCounts[sender] || 0) + 1;
             }
-
-            // Update the previous sender
             previousSender = sender;
         }
     });
-
     return doubleMessageCounts;
 }
 
@@ -869,6 +1020,18 @@ function calculateDoubleMessages(text, region) {
 // }
 
 function generateColumnChartData(messageCounts, startDate, endDate) {
+    if (!startDate || !endDate) {
+        console.warn('Invalid date range for column chart');
+        return { data: [], senders: [] };
+    }
+
+    const daysDifference = (endDate - startDate) / (1000 * 60 * 60 * 24);
+    const minDays = 10; // Minimum days for a meaningful chart
+    if (daysDifference < minDays) {
+        console.warn(`Date range too short for column chart (${daysDifference} days)`);
+        return { data: [], senders: [] };
+    }
+
     const columnChartData = [];
     const senders = new Set();
     let currentDate = new Date(startDate);
@@ -896,71 +1059,68 @@ function generateColumnChartData(messageCounts, startDate, endDate) {
 
     return { data: columnChartData, senders: Array.from(senders) };
 }
+
+
 function calculateChatFocus(text, senders) {
-const lines = text.split('\n');
-const focusCounts = {
-    personA: 0, // Messages focused on Person A
-    personB: 0, // Messages focused on Person B
-};
+    const lines = text.split('\n');
+    const focusCounts = {
+        personA: 0,
+        personB: 0,
+    };
+    let totalFocusedMessages = 0;
 
-// Regex to extract the message content
-const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\] ([^:]+): (.+)/;
+    const regex = window.chatFormat === 'bracket'
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.+)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.+)/;
 
-lines.forEach(line => {
-    const match = line.match(regex);
-    if (match) {
-        const sender = match[7].trim();
-        const message = match[8].toLowerCase(); // Convert to lowercase for easier matching
+    lines.forEach(line => {
+        const match = line.match(regex);
+        if (match) {
+            const sender = match[7].trim();
+            const message = match[8].toLowerCase().replace(/[^\w\s]/g, ' ');
 
-        // Check if the message is about Person A or Person B
-        const isAboutPersonA = message.includes(senders[0].toLowerCase());
-        const isAboutPersonB = message.includes(senders[1].toLowerCase());
+            const nameA = senders[0].toLowerCase();
+            const nameB = senders[1].toLowerCase();
+            const isAboutSelf = /\b(i\s|i'm\s|im\s|i'll\s|i\sam\s|ill\s|i've\s|ive\s|me\s|my\s|mine\s|myself\s)\b/.test(message);
+            const isAboutOther = /\b(you\s|you're\s|youre\s|ur\s|your\s|yourself\s)\b/.test(message);
 
-        // Check for "I" or "I'm" (focus on the sender)
-        const isAboutSelf = message.includes("i ") || message.includes("i'm ") || message.includes("im ") || message.includes("i'll ") || 
-        message.includes("i am ") || message.includes("ill ") || message.includes("i've ") || message.includes("ive ") || 
-        message.includes("me ") || message.includes("my ") || message.includes("mine ") || message.includes("myslf ") || 
-        message.includes("self ") || message.includes("i m ") || message.includes("I'm ") || message.includes("imma ") || 
-        message.includes("mah ") || message.includes("i'v ") || message.includes("i'l ");
-
-
-        // Check for "you" or "you're" (focus on the other person)
-        const isAboutOther = message.includes("you ") || message.includes("you're ") || message.includes("youre ") || 
-                message.includes("ur ") || message.includes("yoou ") || message.includes("u ") || message.includes("yu ") || 
-                message.includes("u're ") || message.includes("yoo ") || message.includes("yore ") || message.includes("you r ") || 
-                message.includes("yer ") || message.includes("yuor ") || message.includes("urself ") || message.includes("urs ") || 
-                message.includes("your ") || message.includes("yourself ") || message.includes("yo're ") || message.includes("urselfs ");
-
-
-        if (sender === senders[0]) {
-            // Person A is speaking
-            if (isAboutPersonB || isAboutOther) {
-                focusCounts.personB += 1; // Focus on Person B
-            } else if (isAboutPersonA || isAboutSelf) {
-                focusCounts.personA += 1; // Focus on Person A
+            let focus = null;
+            if (sender === senders[0]) {
+                if (isAboutOther || message.includes(nameB)) {
+                    focus = 'personB';
+                } else if (isAboutSelf || message.includes(nameA)) {
+                    focus = 'personA';
+                }
+            } else if (sender === senders[1]) {
+                if (isAboutOther || message.includes(nameA)) {
+                    focus = 'personA';
+                } else if (isAboutSelf || message.includes(nameB)) {
+                    focus = 'personB';
+                }
             }
-        } else if (sender === senders[1]) {
-            // Person B is speaking
-            if (isAboutPersonA || isAboutOther) {
-                focusCounts.personA += 1; // Focus on Person A
-            } else if (isAboutPersonB || isAboutSelf) {
-                focusCounts.personB += 1; // Focus on Person B
+
+            if (focus) {
+                focusCounts[focus]++;
+                totalFocusedMessages++;
             }
         }
+    });
+
+    const minMessagesRequired = 20;
+    if (totalFocusedMessages < minMessagesRequired) {
+        console.warn('Too few focused messages for chat focus analysis');
+        return { personA: 50, personB: 50 };
     }
-});
 
-// Calculate percentages
-const totalMessages = focusCounts.personA + focusCounts.personB;
-const percentages = {
-    personA: ((focusCounts.personA / totalMessages) * 100).toFixed(1),
-    personB: ((focusCounts.personB / totalMessages) * 100).toFixed(1),
-};
+    const focusPercentages = {
+        personA: totalFocusedMessages > 0 ? ((focusCounts.personA / totalFocusedMessages) * 100).toFixed(1) : 50,
+        personB: totalFocusedMessages > 0 ? ((focusCounts.personB / totalFocusedMessages) * 100).toFixed(1) : 50,
+    };
 
-return percentages;
+    return focusPercentages;
 }
 
-function analyzeContent(text, region) {
+function analyzeContent(text) {
     const lines = text.split('\n');
     const contentStats = {
         laughs: {},
@@ -968,35 +1128,35 @@ function analyzeContent(text, region) {
         apologies: {},
     };
 
-    // Get the list of senders from global stats
     const senders = Object.keys(window.stats || {});
-
-    // Flexible regex pattern: allows one or two digits for day/month, optional spaces after comma.
-    const regex = /\[(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{1,2}):(\d{1,2})\]\s*([^:]+):\s*(.+)/;
+    const regex = window.chatFormat === 'bracket'
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.+)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.+)/;
 
     lines.forEach(line => {
         const match = line.match(regex);
         if (match) {
-            // Normalize the sender to lowercase
-            const sender = match[7].trim().toLowerCase();
-            const message = match[8].toLowerCase();
+            const sender = match[7].trim();
+            // Remove only invisible characters, preserve emojis
+            const message = match[8].toLowerCase().replace(/[\u200E\u200F]/g, '');
 
-            const laughPatterns = ["lol", "lmao", "lmfao", "rofl", "haha", "hehe", "hah", "heh", "bahaha", "xD", "lulz", "lool", "lel", "lawl", "😂", "😆", "🤣"];
-            if (laughPatterns.some(pattern => message.includes(pattern))) {
+            // Text-based laughter with word boundaries
+            const textLaughPatterns = /\b(lol|lmao|lmfao|rofl|haha|hehe|hahaha|hahahaha|hah|heh|bahaha|xd|lulz|lool|lel|lawl)\b/;
+            // Emoji-based laughter
+            const emojiLaughPatterns = /(😂|😆|🤣)/;
+
+            // Check for either text or emoji laughter
+            if (textLaughPatterns.test(message) || emojiLaughPatterns.test(message)) {
                 contentStats.laughs[sender] = (contentStats.laughs[sender] || 0) + 1;
             }
-            
-            // Check for questions
-            const questionPatterns = ["?", "what", "wut", "wat", "how", "hw", "why", "y", "when", "wen", "where", "wer", "who", "whom", "which", 
-                                      "whitch", "is there", "is thr", "are you", "r u", "wht", "can you", "cud u", "could you", "shud u", "should you"];
-            if (questionPatterns.some(pattern => message.includes(pattern))) {
+
+            const questionPatterns = /\b(what|wut|wat|how|hw|why|y|when|wen|where|wer|who|whom|which|whitch|is\s+there|are\s+you|r\s+u|can\s+you|cud\s+u|could\s+you|shud\s+u|should\s+you|wht)\b|\?$/;
+            if (questionPatterns.test(message)) {
                 contentStats.questions[sender] = (contentStats.questions[sender] || 0) + 1;
             }
-            
-            // Check for apologies
-            const apologyPatterns = ["sorry", "srry", "sry", "apologies", "apology", "mb", "my bad", "forgive me", "i apologize", "pardon me", 
-                                     "excuse me", "oops", "oopsie", "so sorry", "so srry", "so sry", "terribly sorry"];
-            if (apologyPatterns.some(pattern => message.includes(pattern))) {
+
+            const apologyPatterns = /\b(sorry|srry|sry|apologies|apology|mb|my\s+bad|forgive\s+me|i\s+apologize|pardon\s+me|excuse\s+me|oops|oopsie|so\s+sorry|so\s+srry|so\s+sry|terribly\s+sorry)\b/;
+            if (apologyPatterns.test(message)) {
                 contentStats.apologies[sender] = (contentStats.apologies[sender] || 0) + 1;
             }
         }
@@ -1005,7 +1165,7 @@ function analyzeContent(text, region) {
     return contentStats;
 }
 
-function analyzeInteractions(text, region) {
+function analyzeInteractions(text) {
     const lines = text.split('\n');
     const interactions = {}; // Track interactions between senders
     let previousSender = null; // Track the sender of the previous message
@@ -1034,31 +1194,25 @@ function analyzeInteractions(text, region) {
     return interactions;
 }
 
-function analyzeCalls(text, region) {
+function analyzeCalls(text) {
     const lines = text.split('\n');
-    const callStats = {
-        total: 0,
-        longestCalls: []
-    };
-
+    const regex = window.chatFormat === 'bracket' 
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.+)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.+)/;
+    const callStats = { total: 0, longestCalls: [] };
     lines.forEach(line => {
-        // Remove invisible characters
         const cleanLine = line.replace(/[\u200E\u200F]/g, "");
-        const callRegex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\] ([^:]+): (.*)/;
-        const callMatch = cleanLine.match(callRegex);
-
-        if (callMatch) {
-            // Use trimmed text for safety
-            const callText = callMatch[8].trim();
+        const match = cleanLine.match(regex);
+        if (match) {
+            const callText = match[8].trim();
             const isVoiceCall = callText.startsWith("Voice call");
             const isVideoCall = callText.startsWith("Video call");
-            
             if (isVoiceCall || isVideoCall) {
                 callStats.total++;
                 const duration = extractCallDuration(callText);
                 if (duration > 0) {
                     callStats.longestCalls.push({
-                        sender: callMatch[7].trim(),
+                        sender: match[7].trim(),
                         duration: duration,
                         formattedDuration: formatDuration(duration),
                         type: isVideoCall ? "Video" : "Voice"
@@ -1067,12 +1221,8 @@ function analyzeCalls(text, region) {
             }
         }
     });
-
-    // Sort and keep top 3
     callStats.longestCalls.sort((a, b) => b.duration - a.duration);
     callStats.longestCalls = callStats.longestCalls.slice(0, 3);
-
-    // Make it available globally
     window.callStats = callStats;
     return callStats;
 }
@@ -1109,45 +1259,39 @@ function extractCallDuration(callText) {
     
     return 0; // Default if no duration found
 }
-
-function calculateConvoStats(text, region) {
+function calculateConvoStats(text) {
     const lines = text.split('\n');
+    
+    const regex = window.chatFormat === 'bracket' 
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
     const parsedMessages = [];
-    const timestampRegex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\]/;
-    const senderRegex = /\] ([^:]+):/;
-
-    // Settings for grouping
-    const maxGap = 10 * 60 * 1000;      // 10 minutes between messages
-    const newConvoGap = 30 * 60 * 1000; // 30 minutes gap to start new conversation
-    const minDuration = 2 * 60 * 1000;  // 2 minute minimum duration
-    const minMessages = 4;              // 4 messages minimum (2 per participant)
-
-    // Parse messages
     lines.forEach(line => {
-        const timeMatch = line.match(timestampRegex);
-        if (timeMatch) {
-            const day = region === "US" ? timeMatch[2] : timeMatch[1];
-            const month = region === "US" ? timeMatch[1] : timeMatch[2];
-            const year = timeMatch[3];
-            const hour = timeMatch[4];
-            const minute = timeMatch[5];
-            const second = timeMatch[6];
+        const match = line.match(regex);
+        if (match) {
+            const num1 = match[1];
+            const num2 = match[2];
+            const year = match[3];
+            const hour = match[4];
+            const minute = match[5];
+            const second = match[6] || '00';
+            const sender = match[7].trim();
+            const day = window.dateFormat === 'US' ? num2.padStart(2, '0') : num1.padStart(2, '0');
+            const month = window.dateFormat === 'US' ? num1.padStart(2, '0') : num2.padStart(2, '0');
             const timestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
-            
-            let sender = null;
-            const senderMatch = line.match(senderRegex);
-            if (senderMatch) {
-                sender = senderMatch[1].trim();
-            }
-            
             parsedMessages.push({ timestamp, sender, line });
         }
     });
     
-    // Sort messages by time
+    // Sort messages by time (already sorted in original, but ensures consistency)
     parsedMessages.sort((a, b) => a.timestamp - b.timestamp);
 
-    // Group messages into candidate conversations
+    // Group messages into conversations (unchanged)
+    const maxGap = 10 * 60 * 1000;      // 10 minutes between messages
+    const newConvoGap = 30 * 60 * 1000; // 30 minutes gap to start new conversation
+    const minDuration = 2 * 60 * 1000;  // 2 minute minimum duration
+    const minMessages = 4;              // 4 messages minimum
+
     let candidateConvos = [];
     let currentGroup = [];
     
@@ -1159,11 +1303,9 @@ function calculateConvoStats(text, region) {
         } else {
             const gap = message.timestamp - parsedMessages[i - 1].timestamp;
             
-            // Check for monologues (3+ messages from same sender)
             if (currentGroup.length >= 3) {
                 const lastThreeSenders = currentGroup.slice(-3).map(m => m.sender);
                 if (new Set(lastThreeSenders).size === 1) {
-                    // Finalize previous group if it meets criteria
                     if (currentGroup.length >= minMessages) {
                         const participants = new Set(currentGroup.map(m => m.sender));
                         if (participants.size >= 2) {
@@ -1184,7 +1326,6 @@ function calculateConvoStats(text, region) {
             if (gap <= maxGap) {
                 currentGroup.push(message);
             } else {
-                // Finalize current group if it meets criteria
                 if (currentGroup.length >= minMessages) {
                     const participants = new Set(currentGroup.map(m => m.sender));
                     if (participants.size >= 2) {
@@ -1203,7 +1344,6 @@ function calculateConvoStats(text, region) {
         }
     }
     
-    // Finalize the last group
     if (currentGroup.length >= minMessages) {
         const participants = new Set(currentGroup.map(m => m.sender));
         if (participants.size >= 2) {
@@ -1218,15 +1358,12 @@ function calculateConvoStats(text, region) {
         }
     }
 
-    // Merge conversations if gap between them is less than newConvoGap
     const mergedConvos = [];
     if (candidateConvos.length > 0) {
         let currentMerged = { ...candidateConvos[0] };
-        
         for (let i = 1; i < candidateConvos.length; i++) {
             const convo = candidateConvos[i];
             if (convo.startTime - currentMerged.endTime < newConvoGap) {
-                // Merge
                 currentMerged.endTime = convo.endTime;
                 currentMerged.messageCount += convo.messageCount;
             } else {
@@ -1237,52 +1374,50 @@ function calculateConvoStats(text, region) {
         mergedConvos.push(currentMerged);
     }
 
-    // Calculate statistics
-    const overallCount = mergedConvos.length;
+    // Calculate average conversation length
     const totalMessages = mergedConvos.reduce((sum, conv) => sum + conv.messageCount, 0);
-    const overallAverage = overallCount > 0 ? totalMessages / overallCount : 0;
+    const overallAverage = mergedConvos.length > 0 ? totalMessages / mergedConvos.length : 0;
+// Calculate message counts for frequency comparison
+const endDate = parsedMessages.length > 0 
+    ? new Date(parsedMessages[parsedMessages.length - 1].timestamp)
+    : new Date(); // Fallback to current date if no messages
 
-    // Define time periods for frequency comparison
-    const endDate = window.dateRange?.endDate ? 
-        new Date(window.dateRange.endDate).getTime() : 
-        Date.now();
-    
-    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-    
-    const last30 = mergedConvos.filter(conv => 
-        conv.startTime >= endDate - thirtyDays
-    );
-    const prev30 = mergedConvos.filter(conv => 
-        conv.startTime >= endDate - 2 * thirtyDays && 
-        conv.startTime < endDate - thirtyDays
-    );
-    
-    let freqPercentageChange = 0;
-    let trend = "neutral";
-    
-    // Handle all edge cases
-    if (last30.length === 0 && prev30.length === 0) {
-        // No conversations in either period
-        trend = "none";
-    } else if (prev30.length === 0) {
-        // No previous conversations, but current ones exist
-        trend = last30.length > 0 ? "up" : "none";
-        freqPercentageChange = last30.length > 0 ? Infinity : 0;
+const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+const last30Start = endDate.getTime() - thirtyDays;
+const prev30Start = last30Start - thirtyDays;
+
+// Calculate message counts
+const messagesLast30 = parsedMessages.filter(msg => 
+    msg.timestamp >= last30Start && msg.timestamp <= endDate.getTime()
+).length;
+
+const messagesPrev30 = parsedMessages.filter(msg => 
+    msg.timestamp >= prev30Start && msg.timestamp < last30Start
+).length;
+
+// Calculate percentage change and trend
+let freqPercentageChange = 0;
+let trend = "none";
+
+if (messagesLast30 > 0 || messagesPrev30 > 0) {
+    if (messagesPrev30 === 0) {
+        trend = messagesLast30 > 0 ? "up" : "none";
+        freqPercentageChange = messagesLast30 > 0 ? 100 : 0; // 100% increase if no previous messages
     } else {
-        // Standard case with both periods having data
-        freqPercentageChange = ((last30.length - prev30.length) / prev30.length) * 100;
+        freqPercentageChange = ((messagesLast30 - messagesPrev30) / messagesPrev30) * 100;
         trend = freqPercentageChange > 0 ? "up" : 
-               freqPercentageChange < 0 ? "down" : "equal";
+                freqPercentageChange < 0 ? "down" : "equal";
     }
-    
-    return {
-        averageLength: overallAverage.toFixed(1),
-        frequencyLast30: last30.length,
-        frequencyPrev30: prev30.length,
-        freqPercentageChange: Number(freqPercentageChange.toFixed(1)),
-        trend,
-        totalConversations: mergedConvos.length
-    };
+}
+
+return {
+    averageLength: overallAverage.toFixed(1),
+    frequencyLast30: messagesLast30,
+    frequencyPrev30: messagesPrev30,
+    freqPercentageChange: Number(freqPercentageChange.toFixed(1)),
+    trend: trend,
+    totalConversations: mergedConvos.length
+};
 }
 
 function calculateEngagementRatio(conversations) {
@@ -1360,24 +1495,23 @@ function calculateEngagementRatio(conversations) {
 }
 
 // Add this function to fileProcessor.js
-function calculateStreakStats(text, region) {
+function calculateStreakStats(text) {
     const lines = text.split('\n');
     // Regex for format: "[12/04/2023, 17:09:50] Camille: Message"
-    const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\] ([^:]+):/;
-    
-    // Track daily messages and which senders contributed each day.
+    const regex = window.chatFormat === 'bracket' 
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
     const dailyMessages = {};
-    
     lines.forEach(line => {
         const match = line.match(regex);
         if (match) {
-            const day = region === "US" ? match[2] : match[1];
-            const month = region === "US" ? match[1] : match[2];
+            const num1 = match[1];
+            const num2 = match[2];
             const year = match[3];
-            const dateKey = `${year}-${month}-${day}`; // Format: YYYY-MM-DD
-            
             const sender = match[7].trim();
-            
+            const day = window.dateFormat === 'US' ? num2 : num1;
+            const month = window.dateFormat === 'US' ? num1 : num2;
+            const dateKey = `${year}-${month}-${day}`;
             if (!dailyMessages[dateKey]) {
                 dailyMessages[dateKey] = { count: 0, senders: new Set() };
             }
@@ -1445,29 +1579,372 @@ function calculateStreakStats(text, region) {
 }
 
 
+function calculateGhostingStats(text) {
+    const lines = text.split('\n');
+    const ghostingCounts = {};
+    const ghostingDetails = {};
+    let previousMessage = null;
+
+    const closingPhrases = [
+        "bye", "goodbye", "good night", "gn", "night", "see you", "cya", "later", "ttyl",
+        "talk later", "g'night", "sleep well", "sweet dreams", "take care", "catch you later",
+        "😘"  // Added kissing emoji
+    ];
+    const minWordCount = 3;
+    const ghostingThreshold = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
+
+    const regex = window.chatFormat === 'bracket' 
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.+)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.+)/;
+    const messages = [];
+    lines.forEach(line => {
+        const match = line.match(regex);
+        if (match) {
+            const num1 = match[1];
+            const num2 = match[2];
+            const year = match[3];
+            const hour = match[4];
+            const minute = match[5];
+            const second = match[6] || '00';
+            const sender = match[7].trim();
+            const message = match[8].trim();
+            const day = window.dateFormat === 'US' ? num2.padStart(2, '0') : num1.padStart(2, '0');
+            const month = window.dateFormat === 'US' ? num1.padStart(2, '0') : num2.padStart(2, '0');
+            const timestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
+            messages.push({ sender, message, timestamp });
+        }
+    });
+
+    messages.forEach((current, index) => {
+        if (index === messages.length - 1) return;
+
+        const next = messages[index + 1];
+        const timeDiff = next.timestamp - current.timestamp;
+        const words = current.message.split(/\s+/).filter(word => word.trim() !== "");
+        const isClosing = closingPhrases.some(phrase => current.message.toLowerCase().includes(phrase));
+        const expectsResponse = words.some(word => word.endsWith('?')) || words.length >= minWordCount;
+
+        if (
+            current.sender !== next.sender &&
+            timeDiff >= ghostingThreshold &&
+            words.length >= minWordCount &&
+            !isClosing &&
+            expectsResponse
+        ) {
+            const ghostedBy = next.sender;
+            ghostingCounts[ghostedBy] = (ghostingCounts[ghostedBy] || 0) + 1;
+
+            if (!ghostingDetails[ghostedBy]) ghostingDetails[ghostedBy] = [];
+            ghostingDetails[ghostedBy].push({
+                timestamp: current.timestamp,
+                message: current.message,
+                sender: current.sender,
+                responseDelay: timeDiff / (60 * 60 * 1000) // Convert to hours
+            });
+        }
+    });
+
+    const senders = Object.keys(window.stats || {});
+    if (senders.length !== 2) return null;
+
+    const [personA, personB] = senders;
+    const countA = ghostingCounts[personA] || 0;
+    const countB = ghostingCounts[personB] || 0;
+    const total = countA + countB;
+
+    const percentageA = total > 0 ? ((countA / total) * 100).toFixed(1) : 50;
+    const percentageB = total > 0 ? ((countB / total) * 100).toFixed(1) : 50;
+
+    return {
+        ghosting: {
+            participantA: {
+                count: countA,
+                percentage: parseFloat(percentageA),
+                details: ghostingDetails[personA] || []
+            },
+            participantB: {
+                count: countB,
+                percentage: parseFloat(percentageB),
+                details: ghostingDetails[personB] || []
+            },
+            analysis: total > 0
+                ? `Analysis based on ${total} detected ghosting incidents where a message was unanswered for 3+ hours.`
+                : "No significant ghosting incidents detected (messages with 10+ words unanswered for 3+ hours)."
+        }
+    };
+}
+
+export function calculateResponseTimes(text) {
+    const lines = text.split('\n');
+    const regex = window.chatFormat === 'bracket'
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.*)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.*)/;
+
+    const closingPatterns = [
+        /^bye\b/i,
+        /^goodbye\b/i,
+        /\bthanks?\b/i,
+        /\bthank you\b/i,
+        /\bsee you\b/i,
+        /\bttyl\b/i,
+        /\bgood night\b/i,
+        /\bgood morning\b/i,
+        /\bgood afternoon\b/i,
+        /later\b/i,
+        /\bcatch you later\b/i,
+        /\bsee you later\b/i,
+        /\bgn\b/i,
+        /\bnight\b/i,
+        /\bbye for now\b/i,
+        /\bciao\b/i,
+        /\bcheers\b/i,
+        /\bpeace\b/i,
+        /\bOk\b/i,
+        /\bAlright\b/i,
+        /\bSure\b/i,
+        /\b👌\b/i,
+        /\b👍\b/i,
+        /\bthx\b/i,
+        /\bk\b/i,
+        /\bkk\b/i,
+        /\bgot it\b/i,
+        /\byes\b/i,
+        /😘/  // Added kissing emoji
+    ];
+
+    const stats = {};
+    let prevSender = null;
+    let prevTimestamp = null;
+    let prevContent = null;
+
+    for (const line of lines) {
+        const match = line.match(regex);
+        if (!match) continue;
+
+        const day = window.dateFormat === 'US' ? match[2] : match[1];
+        const month = window.dateFormat === 'US' ? match[1] : match[2];
+        const year = match[3];
+        const hour = match[4].padStart(2, '0');
+        const minute = match[5].padStart(2, '0');
+        const second = (match[6] || '00').padStart(2, '0');
+        const sender = match[7].trim();
+        const content = match[8].trim();
+
+        const timestamp = new Date(
+            `${year}-${month}-${day}T${hour}:${minute}:${second}`
+        ).getTime();
+
+        if (
+            prevSender &&
+            sender !== prevSender &&
+            !closingPatterns.some(pattern => pattern.test(prevContent))
+        ) {
+            const diffMinutes = (timestamp - prevTimestamp) / (1000 * 60);
+
+            if (!stats[prevSender]) {
+                stats[prevSender] = { totalTime: 0, count: 0 };
+            }
+
+            stats[prevSender].totalTime += diffMinutes;
+            stats[prevSender].count++;
+        }
+
+        prevSender = sender;
+        prevTimestamp = timestamp;
+        prevContent = content;
+    }
+
+    const simplified = {};
+    for (const [sender, data] of Object.entries(stats)) {
+        const avg = data.count > 0 ? Math.round(data.totalTime / data.count) : 0;
+        simplified[sender] = { averageTime: avg };
+    }
+
+    return simplified;
+}
+
+function createDonutSegment(cx, cy, r_outer, r_inner, startAngle, endAngle, color) {
+    const startRad = (startAngle - 90) * Math.PI / 180;
+    const endRad = (endAngle - 90) * Math.PI / 180;
+    const x1 = cx + r_outer * Math.cos(startRad);
+    const y1 = cy + r_outer * Math.sin(startRad);
+    const x2 = cx + r_outer * Math.cos(endRad);
+    const y2 = cy + r_outer * Math.sin(endRad);
+    const x3 = cx + r_inner * Math.cos(endRad);
+    const y3 = cy + r_inner * Math.sin(endRad);
+    const x4 = cx + r_inner * Math.cos(startRad);
+    const y4 = cy + r_inner * Math.sin(startRad);
+    const largeArc = (endAngle - startAngle > 180) ? 1 : 0;
+    const path = `
+        M ${x1} ${y1}
+        A ${r_outer} ${r_outer} 0 ${largeArc} 1 ${x2} ${y2}
+        L ${x3} ${y3}
+        A ${r_inner} ${r_inner} 0 ${largeArc} 0 ${x4} ${y4}
+        Z
+    `;
+    return `<path d="${path.trim()}" fill="${color}" />`;
+}
+
+function createDonutChart(rawA, rawB, colorA, colorB) {
+    let a = parseFloat(rawA);
+    let b = parseFloat(rawB);
+
+    if (isNaN(a)) a = 0;
+    if (isNaN(b)) b = 0;
+    const total = a + b;
+
+    if (total === 0) {
+        console.warn('No valid data for donut chart:', { rawA, rawB });
+        const segmentA = createDonutSegment(50, 50, 45, 30, 0, 180, colorA || '#3d9c7d');
+        const segmentB = createDonutSegment(50, 50, 45, 30, 180, 360, colorB || '#ff6b6b');
+        return ``;
+    }
+
+    let angleA, angleB;
+    if (total === 0) {
+          console.warn('createDonutChart saw total=0 — rawA, rawB =', rawA, rawB);
+
+        // split the donut in half
+        angleA = 180;
+        angleB = 180;
+    } else {
+        angleA = (a / total) * 360;
+        angleB = 360 - angleA;
+    }
+
+  const segmentA = createDonutSegment(50, 50, 45, 30, 0,       angleA, colorA);
+  const segmentB = createDonutSegment(50, 50, 45, 30, angleA, angleA + angleB, colorB);
+
+  return `
+    <svg viewBox="0 0 100 100">
+      ${segmentA}
+      ${segmentB}
+    </svg>
+  `;
+}
+
+
+function renderEmotionalHeatmap(heatmapData, person1, person2) {
+    const container = document.createElement('div');
+    container.className = 'emotional-heatmap-container';
+
+    // Create legend
+    const legend = document.createElement('div');
+    legend.className = 'heatmap-legend';
+    legend.innerHTML = `
+        <div class="legend-item">
+            <div class="legend-color negative"></div>
+            <span>Negative</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color neutral"></div>
+            <span>Neutral</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color positive"></div>
+            <span>Positive</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color love"></div>
+            <span>Love</span>
+        </div>
+    `;
+    container.appendChild(legend);
+
+    // Create heatmap bars
+    const heatmap = document.createElement('div');
+    heatmap.className = 'heatmap-bars';
+
+    heatmapData.forEach((score, index) => {
+        let color;
+
+        if (score <= 2) {
+            // Red to orange (very negative to mildly negative)
+            const t = score / 2;
+            color = `rgb(255, ${Math.round(80 + 100 * t)}, 0)`; // red to dark orange
+        } else if (score <= 4) {
+            // Orange to yellow to gray (approaching neutral)
+            const t = (score - 2) / 2;
+            const r = Math.round(255 - 55 * t);
+            const g = Math.round(180 + 50 * t);
+            color = `rgb(${r}, ${g}, 100)`; // orange → olive → beige-gray
+        } else if (score <= 6) {
+            // Grey zone (neutral area)
+            const grey = Math.round(160 + (score - 4) * 20);
+            color = `rgb(${grey}, ${grey}, ${grey})`;
+        } else if (score <= 8) {
+            // Neutral to green (mildly positive to strongly positive)
+            const t = (score - 6) / 2;
+            const r = Math.round(160 - 80 * t);
+            const g = Math.round(200 + 55 * t);
+            color = `rgb(${r}, ${g}, 160)`; // grayish → light green → brighter green
+        } else if (score < 10) {
+            // Green to soft purple (positive)
+            const t = (score - 8) / 2;
+            const r = Math.round(160 + 40 * t);
+            const g = Math.round(255 - 100 * t);
+            const b = Math.round(200 + 30 * t);
+            color = `rgb(${r}, ${g}, ${b})`; // pastel green to soft pinkish
+        } else {
+            // Score == 10 → distinct love pink
+            color = '#ff69b4'; // hot pink
+        }
+
+        const bar = document.createElement('div');
+        bar.className = 'heatmap-bar';
+        bar.style.backgroundColor = color;
+        bar.title = `Segment ${index + 1}: ${score.toFixed(1)}`;
+        heatmap.appendChild(bar);
+    });
+
+    container.appendChild(heatmap);
+
+    // Add heatmap timeline labels
+    const timeline = document.createElement('div');
+    timeline.className = 'heatmap-timeline';
+    timeline.innerHTML = `
+        <span>Start</span>
+        <span>End</span>
+    `;
+    container.appendChild(timeline);
+
+    return container;
+}
+
 
 
 function displayAIResults(data, originalNames) {
+
+    const nameA = originalNames?.personA || (data.participants?.[0]?.name || "Participant A");
+    const nameB = originalNames?.personB || (data.participants?.[1]?.name || "Participant B");
+
+    window.emotionalHeatmap = data.emotionalHeatmap || null;
+
+
+    const callId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
     const aiSection = document.getElementById("aiAnalysisSection");
-    if (!aiSection) return;
-  
-    // Remove loading container if it exists
-    const loadingContainer = document.getElementById("aiLoadingContainer");
-    if (loadingContainer) {
-      loadingContainer.remove();
+    if (!aiSection) {
+        console.error('AI Analysis Section not found in DOM');
+        return;
     }
 
-    // Insert the new title (with gradient text) at the top of aiSection
+
+    const ghostingStats = window.ghostingStats || calculateGhostingStats(window.chatText);
+    console.log(`Raw AI Response [Call ID: ${callId}]:`, JSON.stringify(data, null, 2));
+
+    const loadingContainer = document.getElementById("aiLoadingContainer");
+    if (loadingContainer) {
+        loadingContainer.remove();
+    }
+
     const titleEl = document.createElement("h2");
     titleEl.className = "title gradient-text";
-    titleEl.textContent = "AI Analysis";
+    titleEl.textContent = "Deep AI";
     aiSection.insertBefore(titleEl, aiSection.firstChild);
-  
-    // Remove any existing analysis results from a previous run
+
     const oldResults = aiSection.querySelectorAll(".analysis-result");
     oldResults.forEach(el => el.remove());
-    
-    // Create Overall Analysis container (Overall Connection and Evolution)
+
     const overallContainer = document.createElement("div");
     overallContainer.className = "ai-results-container analysis-result";
     overallContainer.innerHTML = `
@@ -1483,7 +1960,6 @@ function displayAIResults(data, originalNames) {
     `;
     aiSection.appendChild(overallContainer);
 
-    // Add Chat Overview section if available
     if (data.chatOverview?.description) {
         const chatOverviewContainer = document.createElement("div");
         chatOverviewContainer.className = "ai-results-container analysis-result";
@@ -1495,128 +1971,359 @@ function displayAIResults(data, originalNames) {
         `;
         aiSection.appendChild(chatOverviewContainer);
     }
-  
-    // Handle Response Analysis - more robust version
-    try {
-        if (data.responseAnalysis || (data.participants && data.participants.length >= 2)) {
-            const responseContainer = document.createElement("div");
-            responseContainer.className = "ai-results-container analysis-result";
-            
-            let responseHTML = `<div class="ai-section">
-                <h3>Response Analysis</h3>`;
-            
-            // Try to get response analysis from multiple possible locations
-            const getResponseAnalysis = (participantIndex) => {
-                return data.responseAnalysis?.[`participant${participantIndex === 0 ? 'A' : 'B'}`]?.explanation ||
-                       data.participants?.[participantIndex]?.responseAnalysis?.explanation ||
-                       data.participants?.[participantIndex]?.responsePattern ||
-                       'No response analysis available';
+
+    
+
+
+  // ─── NORMALIZE AI PAYLOAD ─────────────────────────────────────────────
+    // Get participant names from originalNames first, then fall back to data.participants
+    
+    // Normalize responseAnalysis
+    if (data.responseAnalysis) {
+        const raKeys = Object.keys(data.responseAnalysis);
+        if (raKeys.length === 2) {
+            // If we have exactly 2 keys, assume they're the participants
+            const [raKey1, raKey2] = raKeys;
+            data.responseAnalysis = {
+                [nameA]: data.responseAnalysis[raKey1],
+                [nameB]: data.responseAnalysis[raKey2]
             };
-            
-            if (data.participants?.length >= 2) {
-                const nameA = originalNames?.personA || data.participants[0]?.name || "Participant 1";
-                const nameB = originalNames?.personB || data.participants[1]?.name || "Participant 2";
-                
-                responseHTML += `
-                    <p><strong>${nameA}:</strong> ${getResponseAnalysis(0)}</p>
-                    <p><strong>${nameB}:</strong> ${getResponseAnalysis(1)}</p>
-                `;
-            } else if (data.responseAnalysis) {
-                // Fallback to any response analysis format
-                for (const key in data.responseAnalysis) {
-                    if (typeof data.responseAnalysis[key] === 'object') {
-                        responseHTML += `<p><strong>${key}:</strong> ${data.responseAnalysis[key]?.explanation || 'No details'}</p>`;
-                    } else if (typeof data.responseAnalysis[key] === 'string') {
-                        responseHTML += `<p>${data.responseAnalysis[key]}</p>`;
-                    }
-                }
-            }
-            
-            responseHTML += '</div>';
-            responseContainer.innerHTML = responseHTML;
-            aiSection.appendChild(responseContainer);
+        } else {
+            // Fallback to participantA/B structure
+            data.responseAnalysis = {
+                [nameA]: data.responseAnalysis?.participantA || null,
+                [nameB]: data.responseAnalysis?.participantB || null
+            };
         }
-    } catch (error) {
-        console.error("Error rendering response analysis:", error);
     }
-  
-    // Participant Analysis (only proceed if exactly 2 participants are found)
-    let participantA = null;
-    let participantB = null;
-  
-    if (data.participants?.length === 2) {
-      const [p1, p2] = data.participants;
-  
-      // Use a string similarity helper to match names
-      const score1A = stringSimilarity(p1.name, originalNames.personA);
-      const score1B = stringSimilarity(p1.name, originalNames.personB);
-      const score2A = stringSimilarity(p2.name, originalNames.personA);
-      const score2B = stringSimilarity(p2.name, originalNames.personB);
-  
-      if (score1A + score2B > score1B + score2A) {
-        participantA = p1;
-        participantB = p2;
-      } else {
-        participantA = p2;
-        participantB = p1;
-      }
-  
-      // Force original names from the chat log
-      participantA.name = originalNames.personA;
-      participantB.name = originalNames.personB;
-  
-      // Create a container for each participant's analysis
-      [participantA, participantB].forEach((participant) => {
-        const participantContainer = document.createElement("div");
-        participantContainer.className = "ai-results-container analysis-result";
-        participantContainer.innerHTML = `
-            <div class="participant-analysis">
-                <h3>${participant.name}'s Analysis</h3>
-                <div class="interest-level">Interest: ${participant.interestLevel}/10</div>
-                
-                <div class="communication-style">
-                    <h4>Communication Style</h4>
-                    <p>${participant.communicationStyle?.generalTraits || 'N/A'}</p>
-                    <p>${participant.communicationStyle?.trustAndEmotionalDepth || 'N/A'}</p>
+
+    // Normalize conversationDynamics
+    if (data.conversationDynamics) {
+        const init = data.conversationDynamics.initiation || {};
+        const endd = data.conversationDynamics.ending || {};
+        
+        data.conversationDynamics = {
+            initiation: {
+                participantA: Number(init[nameA] ?? init.participantA ?? 0),
+                participantB: Number(init[nameB] ?? init.participantB ?? 0),
+                analysis: init.analysis || ""
+            },
+            ending: {
+                participantA: Number(endd[nameA] ?? endd.participantA ?? 0),
+                participantB: Number(endd[nameB] ?? endd.participantB ?? 0),
+                analysis: endd.analysis || ""
+            }
+        };
+    }
+
+    const respCont = document.createElement("div");
+respCont.className = "ai-results-container analysis-result";
+
+const raSec = document.createElement("div");
+raSec.className = "ai-section";
+raSec.innerHTML = `<h3>Response Analysis</h3>`;
+
+const raA = data.responseAnalysis?.[nameA];
+const raB = data.responseAnalysis?.[nameB];
+
+if (raA?.explanation) {
+    raSec.appendChild(createAnalysisContent(nameA, raA));
+}
+
+if (raB?.explanation) {
+    raSec.appendChild(createAnalysisContent(nameB, raB));
+}
+
+
+respCont.appendChild(raSec);
+aiSection.appendChild(respCont);
+
+
+
+    // Handle Conversation Dynamics with improved validation
+    // Conversation Dynamics (always render)
+    const dyn = data.conversationDynamics || {};
+    const init = dyn.initiation || {};
+    const endd = dyn.ending || {};
+    
+
+   const dynCont = document.createElement("div");
+    dynCont.className = "ai-results-container analysis-result";
+
+        // Raw numeric values looked up by name
+    const { initiation, ending } = data.conversationDynamics;
+  const initA = initiation.participantA;
+  const initB = initiation.participantB;
+  const endA  = ending.participantA;
+  const endB  = ending.participantB;
+  const initAnalysis = initiation.analysis;
+  const endAnalysis  = ending.analysis;
+
+    // Initiation chart
+    const initSec = document.createElement("div");
+    initSec.className = "ai-section";
+    initSec.innerHTML = `<h3>Who is the biggest conversation initiator?</h3>`;
+    const initContent = document.createElement("div");
+    initContent.className = "analysis-content";
+
+    // Text side
+    const textEl = document.createElement("div");
+    textEl.className = "analysis-text";
+  textEl.innerHTML = `<p>${initAnalysis || 'No initiation analysis available'}</p>`;
+
+    // Chart side: only chart if we have real data
+    const chartEl = document.createElement("div");
+    chartEl.className = "analysis-chart";
+    if (initA > 0 || initB > 0) {
+      chartEl.innerHTML = createDonutChart(initA, initB, window.colors[nameA], window.colors[nameB]);
+    } else {
+      // remove the chart entirely if you prefer:
+      chartEl.remove();
+      textEl.innerHTML = '<p>No initiation data to display</p>';
+    }
+
+    initContent.appendChild(textEl);
+    initContent.appendChild(chartEl);
+    initSec.appendChild(initContent);
+    dynCont.appendChild(initSec);
+
+    // Ending chart—same pattern
+    const endSec = document.createElement("div");
+    endSec.className = "ai-section";
+    endSec.innerHTML = `<h3>Who ended the most conversations?</h3>`;
+    const endContent = document.createElement("div");
+    endContent.className = "analysis-content";
+
+    const endText = document.createElement("div");
+    endText.className = "analysis-text";
+  endText.innerHTML = `<p>${endAnalysis || 'No ending analysis available'}</p>`;
+
+    const endChart = document.createElement("div");
+    endChart.className = "analysis-chart";
+    if (endA > 0 || endB > 0) {
+      endChart.innerHTML = createDonutChart(endA, endB, window.colors[nameA], window.colors[nameB]);
+    } else {
+      endChart.remove();
+      endText.innerHTML = '<p>No ending data to display</p>';
+    }
+
+    endContent.appendChild(endText);
+    endContent.appendChild(endChart);
+    endSec.appendChild(endContent);
+    dynCont.appendChild(endSec);
+
+    console.log('🔍 convDyn raw:', init, endd, 'computed:', { initA, initB, endA, endB });
+
+    // Only append the Conversation Dynamics section if there’s *some* real data
+    const hasInitData = initA + initB > 0;
+   const hasEndData  = endA  + endB > 0;
+    if (hasInitData || hasEndData) {
+      aiSection.appendChild(dynCont);
+    } else {
+      console.warn('Skipping Conversation Dynamics: no data --', { hasInitData, hasEndData });
+    }
+
+    if (ghostingStats && data.participants?.length === 2) {
+        const ghostingContainer = document.createElement("div");
+        ghostingContainer.className = "ai-results-container analysis-result";
+
+        const nameA = originalNames?.personA || data.participants[0]?.name || "Participant 1";
+        const nameB = originalNames?.personB || data.participants[1]?.name || "Participant 2";
+
+        const ghostingSection = document.createElement("div");
+        ghostingSection.className = "ai-section";
+        ghostingSection.innerHTML = `
+            <h3>Who ghosted more often?</h3>
+            <div class="analysis-content">
+                <div class="analysis-text">
+                    <p>${ghostingStats.ghosting.analysis || 'No ghosting analysis available'}</p>
                 </div>
-                
-                <div class="flags-section">
-                    <div class="green-flags">
-                        <h4>Green Flags</h4>
-                        ${participant.greenFlags?.map(flag => `
-                            <div class="flag-item green-flag">
-                                <strong>${flag.title || 'Positive'}:</strong> ${flag.description || 'N/A'}
-                            </div>
-                        `).join('') || '<p>No green flags identified</p>'}
-                    </div>
-                    
-                    <div class="red-flags">
-                        <h4>Red Flags</h4>
-                        ${participant.redFlags?.map(flag => `
-                            <div class="flag-item red-flag">
-                                <strong>${flag.title || 'Concern'}:</strong> ${flag.description || 'N/A'}
-                            </div>
-                        `).join('') || '<p>No red flags identified</p>'}
+                <div class="analysis-chart">
+                    ${createDonutChart(
+                        ghostingStats.ghosting.participantA.percentage,
+                        ghostingStats.ghosting.participantB.percentage,
+                        window.colors[nameA] || '#3d9c7d',
+                        window.colors[nameB] || '#ff6b6b'
+                    )}
+                </div>
+            </div>
+            <div class="ghosting-counts">
+                <div class="ghosting-count-container">
+                    <div class="ghosting-count">
+                        <span class="label">${nameA}:</span>
+                        <span class="count">${ghostingStats.ghosting.participantA.count}</span>
+                        <span class="unit">times</span>
                     </div>
                 </div>
-                
-                <div class="relationship-tip">
-                    <h4>Relationship Tip</h4>
-                    <div class="tip-item">
-                        <strong>${participant.relationshipTip?.title || 'Suggestion'}:</strong>
-                        ${participant.relationshipTip?.description || 'N/A'}
+                <div class="ghosting-count-container">
+                    <div class="ghosting-count">
+                        <span class="label">${nameB}:</span>
+                        <span class="count">${ghostingStats.ghosting.participantB.count}</span>
+                        <span class="unit">times</span>
                     </div>
                 </div>
             </div>
         `;
-        aiSection.appendChild(participantContainer);
-      });
+        ghostingContainer.appendChild(ghostingSection);
+        aiSection.appendChild(ghostingContainer);
     }
-  
-    // Show the analysis completed popup after rendering all results
-    showAnalysisCompletedPopup();
-}
 
+    if (data.emotionalHeatmap && data.emotionalHeatmap.length === 10) {
+        const heatmapContainer = document.createElement("div");
+        heatmapContainer.className = "ai-results-container analysis-result";
+        
+        const heatmapSection = document.createElement("div");
+        heatmapSection.className = "ai-section";
+        heatmapSection.innerHTML = `<h3>Emotional Heatmap</h3>`;
+        
+        const heatmap = renderEmotionalHeatmap(
+            data.emotionalHeatmap,
+            originalNames.personA,
+            originalNames.personB
+        );
+        
+        heatmapSection.appendChild(heatmap);
+        heatmapContainer.appendChild(heatmapSection);
+        aiSection.appendChild(heatmapContainer);
+    }
+
+    if (window.chatFocusPercentages && Object.keys(window.stats).length === 2) {
+        const nameA = originalNames?.personA || (data.participants?.[0]?.name || "Participant A");
+        const nameB = originalNames?.personB || (data.participants?.[1]?.name || "Participant B");
+
+        // Create the AI-styled container
+        const focusContainer = document.createElement("div");
+        focusContainer.className = "ai-results-container analysis-result";
+
+        // Build the content inside the container
+        const focusContent = `
+            <div class="ai-section">
+                <h3>Who the chat focuses on the most?</h3>
+                <div class="analysis-content">
+                    <div class="analysis-text">
+                        <p>${nameA} focuses on ${nameB} ${window.chatFocusPercentages.personB}% of the time, 
+                        while ${nameB} focuses on ${nameA} ${window.chatFocusPercentages.personA}% of the time.</p>
+                    </div>
+                    <div class="analysis-chart">
+                        ${createDonutChart(
+                            window.chatFocusPercentages.personA,
+                            window.chatFocusPercentages.personB,
+                            window.colors[nameA] || '#3d9c7d',
+                            window.colors[nameB] || '#ff6b6b'
+                        )}
+                    </div>
+                </div>
+                <div class="focus-counts">
+                    <div class="focus-count-container">
+                        <div class="focus-count">
+                            <span class="focus-color" style="background-color: ${window.colors[nameA] || '#3d9c7d'}"></span>
+                            <span class="label">${nameA}:</span>
+                            <span class="percentage">${window.chatFocusPercentages.personA}%</span>
+                        </div>
+                    </div>
+                    <div class="focus-count-container">
+                        <div class="focus-count">
+                            <span class="focus-color" style="background-color: ${window.colors[nameB] || '#ff6b6b'}"></span>
+                            <span class="label">${nameB}:</span>
+                            <span class="percentage">${window.chatFocusPercentages.personB}%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        focusContainer.innerHTML = focusContent;
+
+        // Append the styled container to the AI section
+        aiSection.appendChild(focusContainer);
+    }
+
+
+    let participantA = null;
+    let participantB = null;
+
+    if (data.participants?.length === 2) {
+        const [p1, p2] = data.participants;
+
+        const score1A = stringSimilarity(p1.name, originalNames.personA);
+        const score1B = stringSimilarity(p1.name, originalNames.personB);
+        const score2A = stringSimilarity(p2.name, originalNames.personA);
+        const score2B = stringSimilarity(p2.name, originalNames.personB);
+
+        if (score1A + score2B > score1B + score2A) {
+            participantA = p1;
+            participantB = p2;
+        } else {
+            participantA = p2;
+            participantB = p1;
+        }
+
+        participantA.name = originalNames.personA;
+        participantB.name = originalNames.personB;
+
+        [participantA, participantB].forEach((participant) => {
+            const participantContainer = document.createElement("div");
+            participantContainer.className = "ai-results-container analysis-result";
+            participantContainer.innerHTML = `
+                <div class="participant-analysis">
+                    <h3>${participant.name}'s Analysis</h3>
+                    <div class="interest-level">Interest: ${participant.interestLevel}/10</div>
+                    <div class="communication-style">
+                        <h4>Communication Style</h4>
+                        <p>${participant.communicationStyle?.generalTraits || 'N/A'}</p>
+                        <p>${participant.communicationStyle?.trustAndEmotionalDepth || 'N/A'}</p>
+                    </div>
+                    <div class="flags-section">
+                        <div class="green-flags">
+                            <h4>Green Flags</h4>
+                            ${participant.greenFlags?.map(flag => `
+                                <div class="flag-item green-flag">
+                                    <strong>${flag.title || 'Positive'}:</strong> ${flag.description || 'N/A'}
+                                </div>
+                            `).join('') || '<p>No green flags identified</p>'}
+                        </div>
+                        <div class="red-flags">
+                            <h4>Red Flags</h4>
+                            ${participant.redFlags?.map(flag => `
+                                <div class="flag-item red-flag">
+                                    <strong>${flag.title || 'Concern'}:</strong> ${flag.description || 'N/A'}
+                                </div>
+                            `).join('') || '<p>No red flags identified</p>'}
+                        </div>
+                    </div>
+                    <div class="relationship-tip">
+                        <h4>Relationship Tip</h4>
+                        <div class="tip-item">
+                            <strong>${participant.relationshipTip?.title || 'Suggestion'}:</strong>
+                            ${participant.relationshipTip?.description || 'N/A'}
+                        </div>
+                    </div>
+                </div>
+            `;
+            aiSection.appendChild(participantContainer);
+        });
+    }
+
+    aiSection.classList.add('ai-analysis-complete');
+
+
+    showAnalysisCompletedPopup();
+    (async () => {
+        const user = JSON.parse(localStorage.getItem('user') || {});
+        const id = window.currentAnalysisId;
+        if (!user.sub || !id) return;
+
+        const timelineHTML = document.getElementById('timelineSection').outerHTML;
+        const chatHTML = document.getElementById('chatAnalyticsSection').outerHTML;
+        const finalHTML = timelineHTML + chatHTML;
+
+        try {
+            await updateAnalysisHTML(user.sub, id, finalHTML, false);
+            console.log('✅ AI analysis appended to existing record');
+        } catch (err) {
+            console.error('❌ Failed to update AI HTML:', err);
+        }
+    })();
+}
 
 
 function showAnalysisCompletedPopup() {
@@ -1631,9 +2338,9 @@ function showAnalysisCompletedPopup() {
                 <h3 class="ai-popup-title">AI Analysis Completed</h3>
                 <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
             </div>
-            <p class="ai-popup-message">Your chat analysis is now available.</p>
+            <p class="ai-popup-message">Your chat analysis is now available below</p>
             <div class="ai-popup-footer">
-                <a href="#ai-results-container" class="ai-popup-button">View Results</a>
+                <a href="#aiAnalysisSection" class="ai-popup-button">View Results Now</a>
             </div>
         </div>
     `;
@@ -1655,131 +2362,219 @@ function showAnalysisCompletedPopup() {
     });
 }
 
+function showAnalysisSavedPopup() {
+    const popup = document.createElement("div");
+    popup.className = "ai-popup";
+    popup.innerHTML = `
+        <div class="ai-popup-content">
+            <div class="ai-popup-header">
+                <h3 class="ai-popup-title">Analysis Saved</h3>
+                <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
+            </div>
+            <p class="ai-popup-message">Your chat analysis has been saved to your dashboard.</p>
+        </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Remove the popup after 3 seconds
+    setTimeout(() => {
+        if (popup.parentElement) {
+            popup.parentElement.removeChild(popup);
+        }
+    }, 3000);
+    
+    // Remove when clicking outside
+    popup.addEventListener('click', (e) => {
+        if (e.target === popup) {
+            popup.remove();
+        }
+    });
+}
 
 // Helper function for string similarity comparison
 function stringSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
-    
-    // Simple similarity check - can be enhanced with more advanced algorithms
+
     str1 = str1.toLowerCase().trim();
     str2 = str2.toLowerCase().trim();
-    
-    // Check for exact match
+
+    // Exact match
     if (str1 === str2) return 1;
-    
-    // Check if one is contained in the other
-    if (str1.includes(str2)) return 0.8;
-    if (str2.includes(str1)) return 0.8;
-    
-    // Check for common patterns (like first name matching)
+
+    // First word match
     const str1FirstWord = str1.split(' ')[0];
     const str2FirstWord = str2.split(' ')[0];
-    if (str1FirstWord === str2FirstWord) return 0.7;
-    
-    // Check for abbreviations
-    if (str1.startsWith(str2FirstWord) || str2.startsWith(str1FirstWord)) {
-        return 0.6;
-    }
-    
-    return 0;
+    if (str1FirstWord === str2FirstWord) return 0.9;
+
+    // Partial match (contains)
+    if (str1.includes(str2) || str2.includes(str1)) return 0.8;
+
+    // Abbreviation or prefix match
+    if (str1.startsWith(str2FirstWord) || str2.startsWith(str1FirstWord)) return 0.7;
+
+    // Fallback: use a simple Levenshtein distance
+    const maxLen = Math.max(str1.length, str2.length);
+    const distance = levenshteinDistance(str1, str2);
+    return 1 - (distance / maxLen);
 }
 
-   
-async function handleAIClick() {
-    // Check again for sign-in status before proceeding
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    if (!isLoggedIn) {
-      // Should not run analysis if not signed in
-      return;
+function levenshteinDistance(a, b) {
+    const matrix = [];
+
+    for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+    }
+    for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
     }
 
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                );
+            }
+        }
+    }
+
+    return matrix[b.length][a.length];
+}
+
+// In parallax.js, add this helper function
+async function getUncompressedTextSize(file) {
+    if (file.name.endsWith('.zip')) {
+        const arrayBuffer = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
+        if (!txtFile) return file.size; // fallback to compressed size if no txt found
+        return zip.files[txtFile]._data.uncompressedSize;
+    }
+    return file.size; // for .txt files, use the actual size
+}
+
+let aiClickTimeout = null;
+// Replace your existing handleAIClick with this:
+
+async function handleAIClick() {
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    if (!isLoggedIn) return;
+
+    const user = JSON.parse(localStorage.getItem('user') || {});
     const aiToggle = document.getElementById('aiToggle');
     if (aiToggle && !aiToggle.checked) {
-        // Remove any existing AI loading container
-        const aiLoadingContainer = document.getElementById('aiLoadingContainer');
-        if (aiLoadingContainer) {
-            aiLoadingContainer.remove();
-        }
-        return; // Don't run AI analysis if toggle is off
+        // If they toggled AI off mid-flow, just clean up any loading UI
+        const loading = document.getElementById('aiLoadingContainer');
+        if (loading) loading.remove();
+        return;
     }
-  
-    // Get the chat file (assuming the file input is present and already processed)
+
     const fileInput = document.getElementById('fileInput');
-    if (fileInput.files.length === 0) {
-      alert('Please select a file first.');
-      return;
+    if (!fileInput.files.length) {
+        showErrorPopup('Please select a file first.');
+        return;
     }
-  
+
     const file = fileInput.files[0];
-    const reader = new FileReader();
-  
-    reader.onload = async (event) => {
-      try {
-        let text;
-        if (file.name.endsWith('.zip')) {
-          const arrayBuffer = event.target.result;
-          const zip = await JSZip.loadAsync(arrayBuffer);
-          const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
-          if (!txtFile) throw new Error('No .txt file in ZIP');
-          text = await zip.files[txtFile].async('text');
-        } else {
-          text = event.target.result;
-        }
-  
-        if (typeof text !== 'string') {
-          throw new Error('Failed to extract text content');
-        }
-  
-        const preprocessed = preprocessChatForAI(text, document.getElementById('regionSelect').value);
-        if (!preprocessed) {
-          alert('AI analysis is only available for chats with exactly two participants.');
-          return;
-        }
-  
-        // (Optionally, you might want to disable the analysis spinner here)
-        const results = await analyzeWithAI(preprocessed.processedText);
+    const creditsNeeded = window.currentCreditsNeeded || 1;
+    const credits = await checkUserCredits(user.sub);
 
-        
-
-        // Add artificial delay for larger files
-        const startTime = Date.now();
-        await new Promise(resolve => setTimeout(resolve, 500)); // Minimum 500ms delay
-        const processingTime = Date.now() - startTime;
-        
-        if (processingTime < 1000) { // Add extra delay if processing was too fast
-            await new Promise(resolve => setTimeout(resolve, 1000 - processingTime));
-        }
-
-        // Force UI refresh
-        await new Promise(resolve => requestAnimationFrame(resolve));
-        
-        displayAIResults(results, preprocessed.originalNames);
-
-        } catch (error) {
-        console.error('AI analysis failed:', error);
-        // Fallback UI showing error
-        const aiSection = document.getElementById("aiAnalysisSection");
-        if (aiSection) {
-            const errorDiv = document.createElement("div");
-            errorDiv.className = "ai-error";
-            errorDiv.innerHTML = `
-                <h3>Analysis Error</h3>
-                <p>${error.message}</p>
-                <p>Full analysis data is available in console.</p>
-            `;
-            aiSection.appendChild(errorDiv);
-        }
-        // Still log the results if they exist
-        if (results) console.log("Raw AI Results:", results);
+    // === NEW: Prevent AI call when not enough credits ===
+    if (credits < creditsNeeded) {
+        showNoCreditsPopup(creditsNeeded, credits);
+        return;
     }
+
+    // === Otherwise, proceed with AI analysis ===
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            // extract chat text (zip or plain)…
+            let text;
+            if (file.name.endsWith('.zip')) {
+                const zip = await JSZip.loadAsync(event.target.result);
+                const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
+                if (!txtFile) throw new Error('No .txt file in ZIP');
+                text = await zip.files[txtFile].async('text');
+            } else {
+                text = event.target.result;
+            }
+
+            // preprocess and guard group vs. 2-party…
+            const pre = preprocessChatForAI(text);
+            if (!pre) {
+                showGroupChatNoAIPopup();
+                return;
+            }
+
+            
+            const results = await analyzeWithAI(pre.processedText, text);
+
+            // deduct credits only on success
+            const ok = await deductCredit(user.sub, creditsNeeded);
+            if (!ok) console.error('Credit deduction failed');
+
+            displayAIResults(results, pre.originalNames);
+
+        } catch (err) {
+            console.error('AI analysis failed:', err);
+            renderAIError(err.message);
+        }
     };
-  
+
     if (file.name.endsWith('.zip')) {
-      reader.readAsArrayBuffer(file);
+        reader.readAsArrayBuffer(file);
     } else {
-      reader.readAsText(file);
+        reader.readAsText(file);
     }
 }
+
+
+function createAnalysisContent(name, analysis) {
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "analysis-content";
+
+    const textDiv = document.createElement("div");
+    textDiv.className = "analysis-text";
+    const p = document.createElement("p");
+    p.innerHTML = `<strong>${name}:</strong> ${analysis.explanation || "No response pattern provided"}`;
+    textDiv.appendChild(p);
+    contentDiv.appendChild(textDiv);
+
+    // Only add response time if we have window.responseTimeStats
+    if (window.responseTimeStats?.[name]) {
+        const timeContainer = document.createElement("div");
+        timeContainer.className = "response-time-container";
+        const timeDiv = document.createElement("div");
+        timeDiv.className = "analysis-response-time";
+        
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = "Avg resp:";
+        
+        const time = document.createElement("span");
+        time.className = "time";
+        time.textContent = window.responseTimeStats[name].averageTime.toFixed(1);
+        
+        const unit = document.createElement("span");
+        unit.className = "unit";
+        unit.textContent = "min";
+        
+        timeDiv.appendChild(label);
+        timeDiv.appendChild(time);
+        timeDiv.appendChild(unit);
+        timeContainer.appendChild(timeDiv);
+        contentDiv.appendChild(timeContainer);
+    }
+
+    return contentDiv;
+}
+
 
 function renderAIAnalysisSection() {
     // Remove any existing AI Analysis section if present
@@ -1821,33 +2616,262 @@ function renderAIAnalysisSection() {
             setTimeout(() => {
                 handleAIClick();
             }, 500);
-        }
+        } else {
+        // Add encouragement container
+        const encouragementContainer = createAIEncouragementContainer();
+        aiSection.appendChild(encouragementContainer);
+    }
 
         aiSection.appendChild(analysisContainer);
-        } else {
+    } else {
         // When not signed in: display structured placeholders with selective blur
         aiSection.innerHTML = `
             <h2 class="title gradient-text">Deep AI</h2>
             <div class="ai-analysis-container">
-                <!-- Overall Connection Placeholder -->
+                <!-- Overall Connection and Evolution -->
                 <div class="ai-results-container placeholder">
                     <div class="ai-section">
                         <h3>Overall Connection</h3>
                         <div class="blurred-background">
                             <div class="blurred-content">
-                                <p><strong>Placeholder</strong></p>
-                                <p>Curabitur non nisi erat. Fusce ac mi id ipsum congue maximus ut a mauris. Ut in iaculis enim. Nunc sollicitudin quam odio, eu porttitor dui facilisis sed.</p>
+                                <p><strong>Close Friends</strong></p>
+                                <p>The chat log reveals a long-standing friendship with a high degree of familiarity, inside jokes, shared experiences, and mutual support, even amidst playful teasing and occasional conflict.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-section">
+                        <h3>Evolution</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p>Initially, the interaction centers around a shared concern about a school-related event. As the chat progresses, the communication becomes more casual and playful, marked by frequent use of emojis and inside jokes. There are periods of intense engagement, followed by longer gaps in communication. Later exchanges delve into more personal matters, including relationship advice and emotional support. The final stages show a return to more casual banter, demonstrating the resilience of their friendship.</p>
                             </div>
                         </div>
                     </div>
                     <div class="ai-container-overlay">
                         <div class="ai-container-overlay-content">
                             <p>Sign in to see full analysis</p>
-                            <div id="aiSigninButton" class="g-signin2"></div>
+                            <div id="aiSigninButton5" class="g-signin2"></div>
                         </div>
                     </div>
                 </div>
-                <!-- Participant 1 Analysis Placeholder -->
+                <!-- Chat Overview -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Chat Overview</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p>The conversation spans several months and covers a wide range of topics, including school-related events (tests, homework, teachers), shared activities (gaming, sleepovers), personal struggles (challenges, relationships), and inside jokes. The overall mood fluctuates between playful banter, serious discussions, and moments of frustration. Both participants are highly engaged, with frequent exchanges and multimedia sharing. Recurring themes include their competitive nature, anxieties about school performance, and their complex relationship dynamics with other individuals in their social circle. A significant portion of the conversation revolves around a self-imposed challenge to abstain from a certain activity, and the subsequent reactions and support between the two.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton6" class="g-signin2"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Response Analysis -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Response Analysis</h3>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p><strong>${person1}:</strong> Typically responds within 15-30 minutes, with occasional faster replies during active conversations. Shows consistent engagement patterns throughout the day.</p>
+                            </div>
+                            <div class="analysis-response-time blurred-content">
+                                <span class="label">Avg resp:</span>
+                                <span class="time">17</span>
+                                <span class="unit">min</span>
+                            </div>
+                        </div>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p><strong>${person2}:</strong> Response times vary more significantly, from immediate replies to several hours. Most active in evenings and weekends.</p>
+                            </div>
+                            <div class="analysis-response-time blurred-content">
+                                <span class="label">Avg resp:</span>
+                                <span class="time">42</span>
+                                <span class="unit">min</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton7" class="g-signin2"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Conversation Dynamics -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Conversation Dynamics</h3>
+                        <div class="sub-section">
+                            <h4>Who initiates more conversations?</h4>
+                            <div class="analysis-content">
+                                <div class="analysis-text blurred-content">
+                                    <p>While Anatole initiates slightly more conversations, the difference is not substantial. Both participants seem comfortable initiating conversations, suggesting a balanced dynamic.</p>
+                                </div>
+                                <div class="analysis-chart strong-chart-blur">
+                                    ${createDonutChart(
+                                        Math.floor(Math.random() * 61) + 20,
+                                        Math.floor(Math.random() * 61) + 20,
+                                        window.colors[person1] || '#3d9c7d',
+                                        window.colors[person2] || '#ff6b6b'
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sub-section">
+                            <h4>Who ends more conversations?</h4>
+                            <div class="analysis-content">
+                                <div class="analysis-text blurred-content">
+                                    <p>Anatole ends conversations slightly more often, often due to lack of response from Jamz. However, both participants contribute to the natural conclusion of conversations.</p>
+                                </div>
+                                <div class="analysis-chart strong-chart-blur">
+                                    ${createDonutChart(
+                                        Math.floor(Math.random() * 61) + 20,
+                                        Math.floor(Math.random() * 61) + 20,
+                                        window.colors[person1] || '#3d9c7d',
+                                        window.colors[person2] || '#ff6b6b'
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton8" class="g-signin2"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Emotional Heatmap -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Emotional Heatmap</h3>
+                        <div class="emotional-heatmap-container">
+                            <div class="heatmap-legend">
+                                <div class="legend-item">
+                                    <div class="legend-color negative"></div>
+                                    <span>Negative</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color neutral"></div>
+                                    <span>Neutral</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color positive"></div>
+                                    <span>Positive</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color love"></div>
+                                    <span>Love</span>
+                                </div>
+                            </div>
+                            <div class="heatmap-bars strong-chart-blur">
+                                ${[3, 5, 7, 8, 6, 4, 9, 7, 6, 8].map(score => {
+                                    let color;
+                                    if (score <= 2) color = `rgb(255, ${Math.round(80 + 100 * (score/2))}, 0)`;
+                                    else if (score <= 4) color = `rgb(${Math.round(255 - 55 * ((score-2)/2))}, ${Math.round(180 + 50 * ((score-2)/2))}, 100)`;
+                                    else if (score <= 6) {
+                                        const grey = Math.round(160 + (score - 4) * 20);
+                                        color = `rgb(${grey}, ${grey}, ${grey})`;
+                                    }
+                                    else if (score <= 8) color = `rgb(${Math.round(160 - 80 * ((score-6)/2))}, ${Math.round(200 + 55 * ((score-6)/2))}, 160)`;
+                                    else if (score < 10) color = `rgb(${Math.round(160 + 40 * ((score-8)/2))}, ${Math.round(255 - 100 * ((score-8)/2))}, ${Math.round(200 + 30 * ((score-8)/2))})`;
+                                    else color = '#ff69b4';
+                                    return `<div class="heatmap-bar" style="background-color: ${color}"></div>`;
+                                }).join('')}
+                            </div>
+                            <div class="heatmap-timeline">
+                                <span>Start</span>
+                                <span>End</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton12" class="g-signin2"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Chat Focus -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Who the chat focuses on the most?</h3>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p>${person1} focuses on ${person2} 62% of the time, while ${person2} focuses on ${person1} 38% of the time.</p>
+                            </div>
+                            <div class="analysis-chart strong-chart-blur">
+                                ${createDonutChart(
+                                    38,
+                                    62,
+                                    window.colors[person1] || '#3d9c7d',
+                                    window.colors[person2] || '#ff6b6b'
+                                )}
+                            </div>
+                        </div>
+                        <div class="focus-counts blurred-content">
+                            <div class="focus-count-container">
+                                <div class="focus-count">
+                                    <span class="focus-color" style="background-color: ${window.colors[person1] || '#3d9c7d'}"></span>
+                                    <span class="label">${person1}:</span>
+                                    <span class="percentage">38%</span>
+                                </div>
+                            </div>
+                            <div class="focus-count-container">
+                                <div class="focus-count">
+                                    <span class="focus-color" style="background-color: ${window.colors[person2] || '#ff6b6b'}"></span>
+                                    <span class="label">${person2}:</span>
+                                    <span class="percentage">62%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton13" class="g-signin2"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Ghosting Analysis -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Who ghosted more often?</h3>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p>Analysis based on 43 detected ghosting incidents where a message was unanswered for 3+ hours.</p>
+                            </div>
+                            <div class="analysis-chart strong-chart-blur">
+                                ${(() => {
+                                    const p = Math.floor(Math.random() * 61) + 20;
+                                    return createDonutChart(
+                                        p,
+                                        100 - p,
+                                        window.colors[person1] || '#3d9c7d',
+                                        window.colors[person2] || '#ff6b6b'
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                        <div class="ghosting-counts blurred-content">
+                            <p>${person1}: 5 times</p>
+                            <p>${person2}: 3 times</p>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton9" class="g-signin2"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Participant 1 Analysis -->
                 <div class="ai-results-container placeholder">
                     <div class="ai-section participant-analysis">
                         <h3>${person1}'s Analysis</h3>
@@ -1858,7 +2882,9 @@ function renderAIAnalysisSection() {
                             <div class="communication-style">
                                 <h4>Communication Style</h4>
                                 <div class="blurred-content">
-                                    <p>Mauris commodo sem et mollis molestie. Vivamus mollis dui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque.</p>
+                                    <p>Enthusiastic, playful, and proactive. Uses informal language and inside jokes frequently. Shows a willingness to plan and organize activities.
+
+Displays a high level of trust and emotional depth through shared vulnerabilities, support, and concern for Arthur's well-being.</p>
                                 </div>
                             </div>
                             <div class="flags-section">
@@ -1866,10 +2892,15 @@ function renderAIAnalysisSection() {
                                     <h4>Green Flags</h4>
                                     <div class="blurred-content">
                                         <div class="flag-item green-flag">
-                                            <strong>Positive Trait:</strong> Mauris commodo sem et mollui quis eleme commodo in ligula ut scelerisque.
+                                            <strong>Proactive Planning: Alexandre frequently initiates plans and activities, demonstrating initiative and a desire to spend time with Arthur.</strong> Example green flag.
                                         </div>
+                                    </div>
+                                </div>
+                                <div class="green-flags">
+                                    <h4>Green Flags</h4>
+                                    <div class="blurred-content">
                                         <div class="flag-item green-flag">
-                                            <strong>Positive Trait:</strong> Sign in to see green flags
+                                            <strong>Emotional Support: Alexandre offers support and understanding during times of stress or difficulty for Arthur, showing empathy and care.</strong> Example green flag.
                                         </div>
                                     </div>
                                 </div>
@@ -1877,10 +2908,15 @@ function renderAIAnalysisSection() {
                                     <h4>Red Flags</h4>
                                     <div class="blurred-content">
                                         <div class="flag-item red-flag">
-                                            <strong>Potential Concern:</strong>usequat. Suspendisse commodo in ligula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat volutpat. Nu
+                                            <strong>Overreaction: Alexandre admits to overreacting at times, suggesting a need for better emotional regulation.</strong> Example red flag.
                                         </div>
+                                    </div>
+                                </div>
+                                <div class="red-flags">
+                                    <h4>Red Flags</h4>
+                                    <div class="blurred-content">
                                         <div class="flag-item red-flag">
-                                            <strong>Potential Concern:</strong> Mauris commodo s molestie. Vivamus mollis dui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat 
+                                            <strong>Impulsivity: Alexandre's actions, such as the incident with the 5ème student, suggest a tendency towards impulsive behavior.</strong> Example red flag.
                                         </div>
                                     </div>
                                 </div>
@@ -1890,7 +2926,7 @@ function renderAIAnalysisSection() {
                                 <div class="blurred-content">
                                     <div class="tip-item">
                                         <strong>Suggestion:</strong>
-                                        <p>Mauris commodo sem et mollis molestie. Vivgula. Nunc tortor enim, auctor at lacinia vel, pulvinar quis neque.</p>
+                                        <p>Mindfulness and Communication: Alexandre should focus on practicing mindfulness and improving communication skills to manage impulsive reactions and express emotions more constructively.</p>
                                     </div>
                                 </div>
                             </div>
@@ -1899,11 +2935,11 @@ function renderAIAnalysisSection() {
                     <div class="ai-container-overlay">
                         <div class="ai-container-overlay-content">
                             <p>Sign in to see full analysis</p>
-                            <div id="aiSigninButton1" class="g-signin2"></div>
+                            <div id="aiSigninButton10" class="g-signin2"></div>
                         </div>
                     </div>
                 </div>
-                <!-- Participant 2 Analysis Placeholder -->
+                <!-- Participant 2 Analysis -->
                 <div class="ai-results-container placeholder">
                     <div class="ai-section participant-analysis">
                         <h3>${person2}'s Analysis</h3>
@@ -1914,7 +2950,9 @@ function renderAIAnalysisSection() {
                             <div class="communication-style">
                                 <h4>Communication Style</h4>
                                 <div class="blurred-content">
-                                    <p>Mauris commodo sem et mollis molestie. Vivamus mollis dui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque.</p>
+                                    <p>Playful, responsive, and collaborative. Shares similar informal language and inside jokes as Alexandre. Contributes equally to planning and organizing activities.
+
+Demonstrates trust and emotional depth through shared vulnerabilities, support, and concern for Alexandre's well-being.</p>
                                 </div>
                             </div>
                             <div class="flags-section">
@@ -1922,10 +2960,15 @@ function renderAIAnalysisSection() {
                                     <h4>Green Flags</h4>
                                     <div class="blurred-content">
                                         <div class="flag-item green-flag">
-                                            <strong>Positive Trait:</strong> Mauris commodo sollis dui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque.
+                                            <strong>Collaborative Spirit: Arthur actively participates in planning and executing activities with Alexandre, showing a willingness to collaborate and compromise.</strong> Example green flag.
                                         </div>
+                                    </div>
+                                </div>
+                                <div class="green-flags">
+                                    <h4>Green Flags</h4>
+                                    <div class="blurred-content">
                                         <div class="flag-item green-flag">
-                                            <strong>Positive Trait:</strong> Sign in to see green flags
+                                            <strong>Honest Communication: Arthur communicates openly and honestly about his feelings and experiences, fostering a strong foundation of trust.</strong> Example green flag.
                                         </div>
                                     </div>
                                 </div>
@@ -1933,10 +2976,15 @@ function renderAIAnalysisSection() {
                                     <h4>Red Flags</h4>
                                     <div class="blurred-content">
                                         <div class="flag-item red-flag">
-                                            <strong>Potential Concern:</strong> Mauris commodo sem et mollis molestie. Vivula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat volutpat. Nu
+                                            <strong>Fear of Conflict: Arthur's avoidance of conflict with Alexandre's father might indicate a reluctance to address difficult situations directly.</strong> Example red flag.
                                         </div>
+                                    </div>
+                                </div>
+                                <div class="red-flags">
+                                    <h4>Red Flags</h4>
+                                    <div class="blurred-content">
                                         <div class="flag-item red-flag">
-                                            <strong>Potential Concern:</strong>  mollis molestie. Vivamus isse commodo in ligula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat 
+                                            <strong>Impulsivity: Arthur's actions, such as the incident with the smoke inhalation, suggest a tendency towards impulsive behavior.</strong> Example red flag.
                                         </div>
                                     </div>
                                 </div>
@@ -1946,7 +2994,7 @@ function renderAIAnalysisSection() {
                                 <div class="blurred-content">
                                     <div class="tip-item">
                                         <strong>Suggestion:</strong>
-                                        <p>ui quis elementum consequat. Suspendisse commodo in ligula ut scelerisque. Sed fringilla in neque at ornare. Aliquam erat volutpat. Nulla et ultricies ligula. Nunc tortor enim, auctor at lacinia vel, pulvinar quis neque.</p>
+                                        <p>Assertiveness Training: Arthur should work on assertiveness training to improve communication in challenging situations and express needs more effectively.</p>
                                     </div>
                                 </div>
                             </div>
@@ -1955,50 +3003,7 @@ function renderAIAnalysisSection() {
                     <div class="ai-container-overlay">
                         <div class="ai-container-overlay-content">
                             <p>Sign in to see full analysis</p>
-                            <div id="aiSigninButton2" class="g-signin2"></div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Response Analysis Placeholder -->
-                <div class="ai-results-container placeholder">
-                    <div class="ai-section">
-                        <h3 class="title subtitle">Response Analysis</h3>
-                        <div class="blurred-background">
-                            <div class="blurred-content">
-                                <div class="ai-content">
-                                    <p>Integer tempus ligula sit amet mauris ullamcorper, et accumsan odio ornare. Curabitur eleifend odio quis velit congue fermentum.                                     
-                                     </p>
-                                </div>
-                                <div class="ai-content">
-                                    <p>Nullam pulvinar mauris nec urna tincidunt ull.Nullam pulvinar mauris nec urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p                                 
-                                     </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="ai-container-overlay">
-                        <div class="ai-container-overlay-content">
-                            <p>Sign in to see full analysis</p>
-                            <div id="aiSigninButton3" class="g-signin2"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="ai-results-container placeholder">
-                    <div class="ai-section">
-                        <h3 class="title subtitle">Chat Overview</h3>
-                        <div class="blurred-background">
-                            <div class="blurred-content">
-                                <div class="ai-content">
-                                    <p>Integer tempus ligula sit amet mauris ullamcorper, et accumsan odio ornare. Curabitur eleifend odio quis velit congue fermentum. urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p  urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p  urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p  urna tincidunt ullamvida. Ut id p r mauris nec urna tincidunt ullamvida. Ut id p                                     
-                                     </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="ai-container-overlay">
-                        <div class="ai-container-overlay-content">
-                            <p>Sign in to see full analysis</p>
-                            <div id="aiSigninButton4" class="g-signin2"></div>
+                            <div id="aiSigninButton11" class="g-signin2"></div>
                         </div>
                     </div>
                 </div>
@@ -2016,110 +3021,39 @@ function renderAIAnalysisSection() {
     // Append the AI analysis section to the designated container
     const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
     (chatAnalyticsSection || document.body).appendChild(aiSection);
+    const aiButton = aiSection.querySelector('#aiAnalysisButton');
+    if (aiButton) {
+        aiButton.removeEventListener('click', handleAIClick);
+        aiButton.addEventListener('click', handleAIClick, { once: true });
+    }
     return aiSection;
 }
 
-// New function to render group chat AI section
+
 function renderGroupChatAIAnalysisSection() {
-    // Remove any existing AI Analysis section if present
     let existingSection = document.getElementById("aiAnalysisSection");
     if (existingSection) existingSection.remove();
     
-    // Create a new container for the AI analysis section
     const aiSection = document.createElement("div");
     aiSection.id = "aiAnalysisSection";
     aiSection.className = "ai-analysis-section";
     
-    // Add the "Deep AI" title with gradient text style
     const deepAITitle = document.createElement("h2");
     deepAITitle.className = "title gradient-text";
     deepAITitle.textContent = "Deep AI";
     aiSection.appendChild(deepAITitle);
     
-    // Check if user is logged in
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    const messageContainer = document.createElement("div");
+    messageContainer.className = "ai-results-container";
+    messageContainer.innerHTML = `
+        <div class="ai-section">
+            <h3>Group Chat Analysis</h3>
+            <p>AI analysis is currently only available for chats with exactly two participants.</p>
+            <p>Basic analytics are shown above.</p>
+        </div>
+    `;
+    aiSection.appendChild(messageContainer);
     
-    if (isLoggedIn) {
-        // Check the initial toggle state
-        const aiToggle = document.getElementById('aiToggle');
-        const shouldShowAI = aiToggle ? aiToggle.checked : true;
-        
-        // Create the gradient container
-        const gradientContainer = document.createElement("div");
-        gradientContainer.className = "gradient-border-container";
-        
-        // When signed in: show loading state only if toggle is on
-        const analysisContainer = document.createElement("div");
-        analysisContainer.className = "ai-analysis-container";
-        analysisContainer.style.display = shouldShowAI ? 'block' : 'none';
-        
-        if (shouldShowAI) {
-            analysisContainer.innerHTML = `
-                <div id="aiLoadingContainer" class="ai-results-container loading">
-                    <div class="loading-spinner"></div>
-                    <div class="loading-text">Analyzing Group Chat with AI...</div>
-                </div>
-            `;
-            
-            // Auto-start the AI analysis after a short delay
-            setTimeout(() => {
-                handleGroupAIClick();
-            }, 500);
-        }
-
-        gradientContainer.appendChild(analysisContainer);
-        aiSection.appendChild(gradientContainer);
-    } else {
-        // When not signed in: display placeholder with gradient border
-        const gradientContainer = document.createElement("div");
-        gradientContainer.className = "gradient-border-container";
-        
-        gradientContainer.innerHTML = `
-            
-            <div class="ai-analysis-container">
-                <div class="ai-results-container placeholder">
-                    <div class="ai-section">
-                        <h3>Group Dynamics</h3>
-                        <div class="blurred-background">
-                            <div class="blurred-content">
-                                <p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Amet consectetur adipiscing elit quisque faucibus ex sapien. Quisque faucibus ex sapien vitae pellentesque sem placerat. Vitae pellentesque sem placerat in id cursus mi.</p>
-                            </div>
-                        </div>
-                        <h3>Conversation Themes</h3>
-                        <div class="blurred-background">
-                            <div class="blurred-content">
-                                <p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Consectetur adipiscing elit quisque
-                                -  faucibus ex sapien vitae. Ex sapien vitae pellentesque sem placerat in id.
-                                -  Placerat in i</p>
-                            </div>
-                        </div>
-                        <h3>Engagment Analysis</h3>
-                        <div class="blurred-background">
-                            <div class="blurred-content">
-                                <p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Consectetur adipiscing elit quisque faucibus ex sapien vitae. Ex sapien vitae pellentesque sem placerat in id. Placerat in id cursus mi pretium tellus duis. Pretium tellus duis convallis tempus leo eu aenean.</p>
-                            </div>
-                        </div>
-                        <h3>Group Personality</h3>
-                        <div class="blurred-background">
-                            <div class="blurred-content">
-                                <p>Lorem ipsum dolor sit amet consectetur adipiscing elit. Sit amet consectetur adipiscing elit quisque faucibus ex. Adipiscing elit quisque faucibus ex sapien vitae pellentesque.</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="ai-container-overlay">
-                        <div class="ai-container-overlay-content">
-                            <p>Sign in to see full analysis</p>
-                            <div id="aiSigninButton5" class="g-signin2"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        aiSection.appendChild(gradientContainer);
-    }
-    
-    // Append the AI analysis section to the designated container
     const chatAnalyticsSection = document.getElementById("chatAnalyticsSection");
     (chatAnalyticsSection || document.body).appendChild(aiSection);
     return aiSection;
@@ -2133,6 +3067,7 @@ async function handleGroupAIClick() {
       return;
     }
 
+    const user = JSON.parse(localStorage.getItem('user') || {});
     const aiToggle = document.getElementById('aiToggle');
     if (aiToggle && !aiToggle.checked) {
         const aiLoadingContainer = document.getElementById('aiLoadingContainer');
@@ -2142,6 +3077,13 @@ async function handleGroupAIClick() {
         return;
     }
   
+    // Double-check credits before starting analysis
+    const credits = await checkUserCredits(user.sub);
+    if (credits < 1) {
+      alert('You have no credits left. Please purchase more.');
+      return;
+    }
+
     const fileInput = document.getElementById('fileInput');
     if (fileInput.files.length === 0) {
       alert('Please select a file first.');
@@ -2152,29 +3094,36 @@ async function handleGroupAIClick() {
     const reader = new FileReader();
   
     reader.onload = async (event) => {
-      try {
-        let text;
-        if (file.name.endsWith('.zip')) {
-          const arrayBuffer = event.target.result;
-          const zip = await JSZip.loadAsync(arrayBuffer);
-          const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
-          if (!txtFile) throw new Error('No .txt file in ZIP');
-          text = await zip.files[txtFile].async('text');
-        } else {
-          text = event.target.result;
-        }
-  
-        if (typeof text !== 'string') {
-          throw new Error('Failed to extract text content');
-        }
+        try {
+            let text;
+            if (file.name.endsWith('.zip')) {
+                const arrayBuffer = event.target.result;
+                const zip = await JSZip.loadAsync(arrayBuffer);
+                const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
+                if (!txtFile) throw new Error('No .txt file in ZIP');
+                text = await zip.files[txtFile].async('text');
+            } else {
+                text = event.target.result;
+            }
 
-        const preprocessed = preprocessGroupChat(text, document.getElementById('regionSelect').value);
-        if (!preprocessed) {
-          alert('Group chat analysis requires 3 or more participants');
-          return;
-        }
+            if (typeof text !== 'string') {
+                throw new Error('Failed to extract text content');
+            }
+
+            const preprocessed = preprocessGroupChat(text); // Remove region parameter
+            if (!preprocessed) {
+                alert('Group chat analysis requires 3 or more participants');
+                return;
+            }
 
         const results = await analyzeGroupChatWithAI(preprocessed.processedText);
+
+        // Only deduct credit AFTER successful analysis
+        const ok = await deductCredit(user.sub, 1);
+        if (!ok) {
+          console.error('Credit deduction failed');
+          // Don't throw error here since analysis already completed
+        }
 
         // Add artificial delay for larger files
         const startTime = Date.now();
@@ -2187,7 +3136,7 @@ async function handleGroupAIClick() {
 
         displayGroupAIResults(results);
 
-        } catch (error) {
+      } catch (error) {
         console.error('Group chat AI analysis failed:', error);
         const aiSection = document.getElementById("aiAnalysisSection");
         if (aiSection) {
@@ -2196,12 +3145,11 @@ async function handleGroupAIClick() {
             errorDiv.innerHTML = `
                 <h3>Analysis Error</h3>
                 <p>${error.message}</p>
-                <p>Full analysis data is available in console.</p>
+                <p>No credits were deducted for this failed analysis.</p>
             `;
             aiSection.appendChild(errorDiv);
         }
-        if (results) console.log("Raw AI Results:", results);
-    }
+      }
     };
   
     if (file.name.endsWith('.zip')) {
@@ -2215,6 +3163,8 @@ async function handleGroupAIClick() {
 function displayGroupAIResults(data) {
     const aiSection = document.getElementById("aiAnalysisSection");
     if (!aiSection) return;
+
+    aiSection.classList.add('ai-analysis-complete');
   
     // Remove loading container if it exists
     const loadingContainer = document.getElementById("aiLoadingContainer");
@@ -2284,4 +3234,39 @@ function displayGroupAIResults(data) {
     
     // Show the analysis completed popup
     showAnalysisCompletedPopup();
+    (async () => {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const id   = window.currentAnalysisId;
+        if (!user.sub || !id) return;
+      
+        // 1) grab both sections by ID
+        const timelineHTML = document.getElementById('timelineSection').outerHTML;
+        const chatHTML     = document.getElementById('chatAnalyticsSection').outerHTML;
+      
+        // 2) reconstruct exactly how you saved it originally
+        const finalHTML = timelineHTML + chatHTML;
+      
+        try {
+          await updateAnalysisHTML(user.sub, id, finalHTML);
+          console.log('✅ AI analysis appended to existing record');
+        } catch (err) {
+          console.error('❌ Failed to update AI HTML:', err);
+        }
+      })();
+      
+      
+}
+
+function createAIEncouragementContainer() {
+    const container = document.createElement('div');
+    container.className = 'gradient-border-container';
+    container.innerHTML = `
+        <div class="ai-results-container encouragement">
+            <div class="ai-section">
+                <h3>Unlock More Insights with AI</h3>
+                <p>Enable AI analysis to get deeper insights such as red flags, response times, tips, and overviews.</p>
+            </div>
+        </div>
+    `;
+    return container;
 }

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <link rel="icon" type="image/png" href="assets/chatPhantom.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ChatPhantom - Buy Credits</title>
@@ -8,29 +9,62 @@
     <link rel="stylesheet" href="styles/navbar.css">
     <link rel="stylesheet" href="styles/credits.css">
     <style>
-      /* Specific sizing for Stripe and PayPal logos */
+      /* Specific sizing for Stripe logo */
       .stripe-logo {
         width: 48px;
         height: auto;
         display: block;
       }
-      .paypal-logo {
-        width: 32px;
-        height: auto;
-        display: block;
-      }
-      /* Keep Visa/MasterCard sizing as before */
       .accepted-cards img {
         height: 24px;
         width: auto;
         opacity: 1;
+      }
+      /* Improved button styles */
+      .cta-button {
+        border-radius: 50px;
+        padding: 12px 24px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+      }
+      .select-plan {
+        background-color: #4f46e5;
+        color: white;
+        border: none;
+      }
+      .select-plan:hover {
+        background-color: #4338ca;
+        transform: translateY(-2px);
+      }
+      .stripe-checkout {
+        background-color: #635bff;
+        color: white;
+        border: none;
+      }
+      .stripe-checkout:hover {
+        background-color: #4f46e5;
+        transform: translateY(-2px);
+      }
+      .pricing-card.popular {
+        border: 2px solid #4f46e5;
+        transform: scale(1.02);
+        z-index: 1;
+      }
+      .popular-badge {
+        background-color: #4f46e5;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 50px;
+        font-size: 12px;
+        font-weight: bold;
+        display: inline-block;
+        margin-bottom: 10px;
       }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
     <!-- Payment SDKs -->
     <script src="https://js.stripe.com/v3/"></script>
-    <script src="https://www.paypal.com/sdk/js?client-id=YOUR_PAYPAL_CLIENT_ID&currency=USD"></script>
   
     <!-- 1) Inline helper -->
     <script>
@@ -49,7 +83,9 @@
     <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
   
     <!-- 3) Auth module -->
-    <script type="module" src="scripts/authCheck.js" defer></script>
+    <script type="module" src="scripts/authCheck.js"></script>
+    <script type="module" src="scripts/api.js"></script>
+
   </head>
   
 <body class="analysis-page">
@@ -63,10 +99,12 @@
       </a>    
       <div class="auth-container">
         <!-- hidden by default until renderAuthUI shows them -->
-      <div class="credits-display hidden">
-        <img src="assets/credit5.png" alt="Credits" class="credit-icon">
-        <span id="creditCount">0</span>
-      </div>
+      <a href="credits.html" class="credits-link">
+        <div class="credits-display hidden" id="creditsContainer">
+          <img src="assets/credit5.png" alt="Credits" class="credit-icon">
+          <span id="creditCount">0</span>
+        </div>
+      </a>
 
       <div id="gSignInWrapper">
         <!-- Google button is visible until logged in -->
@@ -106,56 +144,54 @@
       <!-- Basic Plan -->
       <div class="pricing-card">
         <div class="pricing-header">
-          <h3>Starter Pack</h3>
-          <div class="price">$0.99</div>
-          <div class="credits-amount">10 Credits</div>
+          <h3>Basic</h3>
+          <div class="price">$3.99</div>
+          <div class="credits-amount">40 Credits</div>
         </div>
         <div class="pricing-features">
           <ul>
-            <li>✔ 1 Detailed AI Analysis</li>
-            <li>✔ Advanced chat statistics</li>
-            <li>✔ 5-day access to results</li>
+            <li>✔ Full AI insights</li>
+            <li>✔ Understand your conversations</li>
+            <li>✔ Fix issues within your chats and relationships</li>
           </ul>
         </div>
-        <button class="cta-button select-plan" data-plan="basic" data-amount="10" data-price="0.99">Select Plan</button>
+        <button class="cta-button select-plan" data-plan="basic" data-amount="60" data-price="4.99">Get Started</button>
       </div>
 
       <!-- Popular Plan -->
       <div class="pricing-card popular">
-        <div class="popular-badge">Popular</div>
+        <div class="popular-badge">POPULAR</div>
         <div class="pricing-header">
           <h3>Power User</h3>
-          <div class="price">$4.99</div>
-          <div class="credits-amount">60 Credits</div>
+          <div class="price">$6.49</div>
+          <div class="credits-amount">95 Credits</div>
         </div>
         <div class="pricing-features">
           <ul>
-            <li>✔ 6 Detailed AI Analyses</li>
-            <li>✔ Advanced chat statistics</li>
-            <li>✔ 30-day access to results</li>
-            <li>✔ Priority processing</li>
+            <li>✔ 30% savings</li>
+            <li>✔ Full AI insights</li>
+            <li>✔ Understand your conversations</li>
+            <li>✔ Fix issues within your chats and relationships</li>
           </ul>
         </div>
-        <button class="cta-button select-plan" data-plan="power" data-amount="60" data-price="4.99">Select Plan</button>
+        <button class="cta-button select-plan" data-plan="power" data-amount="120" data-price="6.99">Get Started</button>
       </div>
 
       <!-- Premium Plan -->
-      <div class="pricing-card premium">
-        <div class="premium-badge">Best Value</div>
+      <div class="pricing-card">
         <div class="pricing-header">
           <h3>Premium</h3>
           <div class="price">$9.99</div>
-          <div class="credits-amount">150 Credits</div>
+          <div class="credits-amount">170 Credits</div>
         </div>
         <div class="pricing-features">
           <ul>
-            <li>✔ 15 Detailed AI Analyses</li>
-            <li>✔ Advanced chat statistics</li>
-            <li>✔ Unlimited access to results</li>
-            <li>✔ Priority processing</li>
+            <li>✔ 40% savings</li>
+            <li>✔ Enough for enormous chats</li>
+            <li>✔ Everything in the Basic pack</li>
           </ul>
         </div>
-        <button class="cta-button select-plan" data-plan="premium" data-amount="150" data-price="9.99">Select Plan</button>
+        <button class="cta-button select-plan" data-plan="premium" data-amount="200" data-price="11.99">Get Started</button>
       </div>
     </div>
 
@@ -165,8 +201,8 @@
         <div class="selected-plan-info">
           <div class="selected-plan">
             <span id="selectedPlanName">Power User</span>
-            <span id="selectedPlanCredits">60 Credits</span>
-            <span id="selectedPlanPrice">$4.99</span>
+            <span id="selectedPlanCredits">170 Credits</span>
+            <span id="selectedPlanPrice">$9.99</span>
           </div>
         </div>
   
@@ -184,21 +220,6 @@
               </div>
             </div>
             <button class="cta-button stripe-checkout">Pay with Card</button>
-          </div>
-  
-          <div class="payment-divider">
-            <span>or</span>
-          </div>
-  
-          <div class="payment-option">
-            <div class="payment-method">
-              <img class="paypal-logo" src="assets/paypal.png" alt="PayPal Logo">
-              <div class="payment-details">
-                <h3>PayPal</h3>
-                <p>Pay with your PayPal account</p>
-              </div>
-            </div>
-            <button class="cta-button paypal-checkout">Pay with PayPal</button>
           </div>
         </div>
   
@@ -221,7 +242,7 @@
     <div class="faq-item">
       <button class="faq-question">Can I get a refund?</button>
       <div class="faq-answer">
-        <p>Yes, we offer refunds for unused credits within 14 days of purchase. Please contact our support team for assistance.</p>
+        <p>Yes, we offer refunds for unused credits within 14 days of purchase. Please contact our support team if you need assistance.</p>
       </div>
     </div>
     <div class="faq-item">
@@ -233,7 +254,7 @@
     <div class="faq-item">
       <button class="faq-question">How many credits does one analysis use?</button>
       <div class="faq-answer">
-        <p>Each full AI analysis of a chat consumes 10 credits. Basic statistics and visualizations are always free.</p>
+        <p>A singular credit can analyze a chat log with a size of 40kb or 5000 words, so on average analyzing a 2 year long chat is about 3 to 5 credits</p>
       </div>
     </div>
   </div>
@@ -249,27 +270,17 @@
         <div>
           <h4>Legal</h4>
           <a href="terms.html">Terms of Service</a>
-          <a href="#">Privacy Policy</a>
-        </div>
-        <div>
-          <h4>Company</h4>
-          <a href="#">About Us</a>
-          <a href="#">Contact</a>
+          <a href="privacyPolicy.html">Privacy Policy</a>
         </div>
       </div>
       <p>© 2023 ConvoClarity. All rights reserved.</p>
     </div>
   </footer>
 
-  <script type="module" src="/scripts/authCheck.js"></script>
-<script type="module" src="/scripts/api.js"></script>
-<script type="module" src="/scripts/credits.js"></script>  <!-- your page-specific JS -->
-
-
 
   <script>
     // Initialize Stripe
-    const stripe = Stripe('pk_test_your_stripe_publishable_key');
+    const stripe = Stripe('pk_test_51RT0voHFy9ZvB1zudS4kSvVomq82JT7w7AUjbWsq7ivRI2cLgJGb4wddwaPJZgRBG3dtbDhD8AGk0oyVmVMuP9Gk00KOXcJmwh');
     
     // Selected plan data
     let selectedPlan = null;
@@ -304,87 +315,71 @@
     });
 
     // Stripe Checkout
+    // In the stripe-checkout click handler:
     document.querySelector('.stripe-checkout').addEventListener('click', async function() {
-      if (!selectedPlan) {
-        alert('Please select a plan first');
-        return;
-      }
-      
-      this.disabled = true;
-      this.textContent = 'Processing...';
-      
-      try {
-        // Create a Checkout Session on your server
-        const response = await fetch('/create-stripe-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            plan: selectedPlan.id,
-            amount: selectedPlan.amount,
-            price: selectedPlan.price,
-            name: selectedPlan.name
-          }),
-        });
-        
-        const session = await response.json();
-        
-        // Redirect to Stripe Checkout
-        const result = await stripe.redirectToCheckout({
-          sessionId: session.id
-        });
-        
-        if (result.error) {
-          throw result.error;
+  if (!selectedPlan) {
+    alert('Please select a plan first');
+    return;
+  }
+  
+  this.disabled = true;
+  this.textContent = 'Processing...';
+  
+  try {
+    // Get current user ID - wait for auth to be ready
+    const userId = await new Promise((resolve) => {
+      const checkUser = () => {
+        const id = localStorage.getItem('userId');
+        if (id) {
+          resolve(id);
+        } else {
+          setTimeout(checkUser, 100);
         }
-      } catch (error) {
-        console.error('Error:', error);
-        alert('There was an error processing your payment. Please try again.');
-        this.disabled = false;
-        this.textContent = 'Pay with Card';
-      }
+      };
+      checkUser();
     });
 
-    // PayPal Checkout
-    document.querySelector('.paypal-checkout').addEventListener('click', async function() {
-      if (!selectedPlan) {
-        alert('Please select a plan first');
-        return;
-      }
-      
-      this.disabled = true;
-      this.textContent = 'Redirecting...';
-      
-      try {
-        // Create PayPal order
-        const response = await fetch('/create-paypal-order', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            plan: selectedPlan.id,
-            amount: selectedPlan.amount,
-            price: selectedPlan.price,
-            name: selectedPlan.name
-          }),
-        });
-        
-        const order = await response.json();
-        
-        // Open PayPal checkout in new tab
-        window.open(`https://www.paypal.com/checkoutnow?token=${order.id}`, '_blank');
-        
-        // Poll for payment completion (simplified example)
-        checkPaymentStatus(order.id);
-      } catch (error) {
-        console.error('Error:', error);
-        alert('There was an error processing your payment. Please try again.');
-        this.disabled = false;
-        this.textContent = 'Pay with PayPal';
-      }
+    if (!userId) {
+      throw new Error('User not authenticated - please sign in');
+    }
+    
+    // Create a Checkout Session on your server
+    const response = await fetch('/create-stripe-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': userId
+      },
+      body: JSON.stringify({
+        plan: selectedPlan.id,
+        amount: selectedPlan.amount,
+        price: selectedPlan.price,
+        name: selectedPlan.name
+      }),
     });
+    
+    if (!response.ok) {
+      throw new Error('Failed to create payment session');
+    }
+    
+    const session = await response.json();
+    
+    // Redirect to Stripe Checkout
+    const result = await stripe.redirectToCheckout({
+      sessionId: session.id
+    });
+    
+    if (result.error) {
+      throw result.error;
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert(error.message || 'There was an error processing your payment. Please try again.');
+    this.disabled = false;
+    this.textContent = 'Pay with Card';
+  }
+});
+
 
     // Simplified payment status check
     async function checkPaymentStatus(orderId) {

@@ -333,3 +333,89 @@ footer {
   margin: 0 auto; /* Center the container */
   padding: 0 5px; /* Small horizontal padding */
 }
+
+/* Container for buttons */
+.chat-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* “Open” button */
+.view-button {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 5px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--gradient);
+  color: var(--light-text);
+  transition: background-color 0.2s, transform 0.2s;
+}
+.view-button:hover {
+  background: var(--primary-color);
+  transform: translateY(-1px);
+}
+
+/* “Delete” button */
+.delete-button {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 5px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #f5f5f5;
+  color: #d32f2f;
+  transition: background-color 0.2s, transform 0.2s;
+} 
+.delete-button:hover {
+  background: #ffebee;
+  transform: translateY(-1px);
+}
+
+.ai-pill {
+  display: inline-flex;
+  align-items: center;
+  background-color: #e0e0e0;
+  border-radius: 12px;
+  padding: 4px 8px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.ai-logo {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  background-image: url('../assets/logoAI.png'); /* Adjust the path/filename as needed */
+  background-size: cover;
+  background-position: center;
+}
+
+/* Add to your CSS file */
+.card-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.expiration-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: #fff3e0;
+  border-radius: 16px;
+  font-size: 12px;
+  color: #e65100;
+}
+
+.expiration-pill i {
+  font-size: 10px;
+}
+
+.expiration-pill .expiration-time {
+  font-weight: 500;
+}
+
