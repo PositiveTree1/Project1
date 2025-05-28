@@ -470,11 +470,13 @@ function showNoCreditsPopup(needed = 1, current = 0) {
     // Initialize everything once DOM is ready
     document.addEventListener('DOMContentLoaded', () => {
         initializeElements();
-        setupDragDrop();
-        setupGuideToggle();
-        setupConsentButtons();
-        
-        updateUploadInterface();
+       setupDragDrop();
+       setupGuideToggle();
+       setupConsentButtons();
+
+       updateUploadInterface();
+       // ← ensure AI toggle UI sees the real logged-out state on load
+       document.dispatchEvent(new Event('authChange'));
     });
 
     // Recompute “show dropzone vs. button” if window is resized

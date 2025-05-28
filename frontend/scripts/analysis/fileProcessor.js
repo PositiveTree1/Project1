@@ -1585,6 +1585,9 @@ function calculateGhostingStats(text) {
     const ghostingDetails = {};
     let previousMessage = null;
 
+    const maxResponseThreshold = 5 * 24 * 60 * 60 * 1000; // 5 days in milliseconds
+
+
     const closingPhrases = [
         "bye", "goodbye", "good night", "gn", "night", "see you", "cya", "later", "ttyl",
         "talk later", "g'night", "sleep well", "sweet dreams", "take care", "catch you later",
@@ -1627,6 +1630,7 @@ function calculateGhostingStats(text) {
         if (
             current.sender !== next.sender &&
             timeDiff >= ghostingThreshold &&
+            timeDiff <= maxResponseThreshold &&
             words.length >= minWordCount &&
             !isClosing &&
             expectsResponse
@@ -1680,6 +1684,8 @@ export function calculateResponseTimes(text) {
         ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.*)/
         : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.*)/;
 
+
+
     const closingPatterns = [
         /^bye\b/i,
         /^goodbye\b/i,
@@ -1712,6 +1718,8 @@ export function calculateResponseTimes(text) {
         /😘/  // Added kissing emoji
     ];
 
+    const maxResponseThreshold = 5 * 24 * 60 * 60 * 1000; // 5 days in ms
+
     const stats = {};
     let prevSender = null;
     let prevTimestamp = null;
@@ -1739,14 +1747,18 @@ export function calculateResponseTimes(text) {
             sender !== prevSender &&
             !closingPatterns.some(pattern => pattern.test(prevContent))
         ) {
-            const diffMinutes = (timestamp - prevTimestamp) / (1000 * 60);
+            const diffMs = timestamp - prevTimestamp;
+            const diffMinutes = diffMs / (1000 * 60);
 
-            if (!stats[prevSender]) {
-                stats[prevSender] = { totalTime: 0, count: 0 };
+            if (diffMs <= maxResponseThreshold) {
+                if (!stats[prevSender]) {
+                    stats[prevSender] = { totalTime: 0, count: 0 };
+                }
+
+                stats[prevSender].totalTime += diffMinutes;
+                stats[prevSender].count++;
             }
 
-            stats[prevSender].totalTime += diffMinutes;
-            stats[prevSender].count++;
         }
 
         prevSender = sender;

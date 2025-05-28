@@ -2587,7 +2587,7 @@ select {
 
 /* New class for charts with a bigger blur */
 .strong-chart-blur {
-    filter: blur(20px); /* Stronger blur for charts */
+    filter: blur(40px); /* Stronger blur for charts */
 }
 
 
@@ -2928,7 +2928,7 @@ select {
     height: 100%;
     background: var(--primary-color);
     width: 100%;
-    animation: progressBar 7s linear forwards;
+    animation: progressBar 5s linear forwards;
 }
 
 @keyframes progressBar {

@@ -4,14 +4,6 @@ const app     = express();
 const cors    = require('cors');
 const path    = require('path');
 
-// 1️⃣ Apply these *before* any `app.post(…)` or `app.get(…)`
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// 2️⃣ Now require Stripe, Firebase, etc.
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const admin  = require('firebase-admin');
 
 // Add webhook endpoint to handle payment completion
 app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
@@ -41,6 +33,21 @@ app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req,
 
   res.json({received: true});
 });
+
+// 1️⃣ Apply these *before* any `app.post(…)` or `app.get(…)`
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// 2️⃣ Now require Stripe, Firebase, etc.
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const admin  = require('firebase-admin');
+
+function requireAuth(req, res, next) {
+  const userId = req.body?.userId || req.params?.userId;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  return next();
+}
 
 
 // Add this endpoint to handle Stripe checkout session creation
@@ -193,7 +200,8 @@ app.get('/api/check-consent/:userId', async (req, res) => {
 });
 
 // POST /api/save-consent
-app.post('/api/save-consent', async (req, res) => {
+app.post('/api/save-consent', requireAuth, async (req, res) => {
+
   try {
     const { userId, consented } = req.body;
     if (!userId || typeof consented !== 'boolean') {
@@ -257,6 +265,25 @@ app.patch('/api/update-analysis/:userId/:analysisId', async (req, res) => {
   } catch (e) {
     console.error('Update failed:', e);
     res.status(500).json({ error: 'Failed to update analysis' });
+  }
+});
+
+// Add this endpoint before other routes
+app.get('/api/verify-auth/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const doc = await db.collection('users').doc(userId).get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ authenticated: false });
+    }
+    
+    const userData = doc.data();
+    // Add any additional verification checks here
+    return res.json({ authenticated: true });
+  } catch (err) {
+    console.error('Auth verification failed:', err);
+    return res.status(500).json({ authenticated: false });
   }
 });
 
@@ -423,22 +450,26 @@ app.get('/api/credits-listener/:userId', async (req, res) => {
 
 app.get('/api/user-credits/:userId', async (req, res) => {
   try {
-    console.log('🛠 GET /api/user-credits/', req.params.userId);
-    const doc = await db.collection('users').doc(req.params.userId).get();
-    if (!doc.exists) return res.json({ credits: null }); // Previously 0
-
-    const credits = doc.data().credits || 0;
-    console.log('📦 credits =', credits);
-    return res.json({ credits });
+    const userId = req.params.userId;
+    const userRef = db.collection('users').doc(userId);
+    const snap = await userRef.get();
+    
+    // Don't create user if doesn't exist
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const data = snap.data();
+    return res.json({ credits: data.credits || 0 });
   } catch (err) {
-    console.error('❌ GET /api/user-credits failed:', err);
-    return res.status(500).json({ error: 'Failed to get user credits' });
+    console.error('Error fetching user credits:', err);
+    return res.status(500).json({ error: 'Could not fetch credits' });
   }
 });
 
 
+app.post('/api/update-credits', requireAuth, async (req, res) => {
 
-app.post('/api/update-credits', async (req, res) => {
   try {
     const { userId, amount } = req.body;
     if (!userId || typeof amount !== 'number') {

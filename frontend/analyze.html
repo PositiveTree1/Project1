@@ -44,9 +44,11 @@
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
         window.setupGoogleButton();
+        document.querySelector('.g_id_signin')?.classList.add('visible');
       });
     } else {
       window.setupGoogleButton();
+      document.querySelector('.g_id_signin')?.classList.add('visible');
     }
   }
 </script>
@@ -63,7 +65,15 @@
   
     <script type="module" src="/scripts/authCheck.js"></script>
     
-    
+    <style>
+  /* Temporary fix for Google button flash */
+  .g_id_signin {
+    visibility: hidden;
+  }
+  .g_id_signin.visible {
+    visibility: visible;
+  }
+</style>
 
 
   </head>
@@ -89,9 +99,9 @@
       </a>
 
 
-      <div id="gSignInWrapper">
+      <div id="googleSignInWrapper">
         <!-- Google button is visible until logged in -->
-        <div id="googleSignInButton" class="g-signin2"></div>
+        <div id="googleSignInButton" class="hidden"></div>
 
         <!-- user-dropdown hidden until logged in -->
         <div class="user-dropdown hidden">

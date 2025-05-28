@@ -9,16 +9,18 @@
     <link rel="stylesheet" href="styles/navbar.css">
 
     <script>
-    function initGoogleSignIn() {
-        if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.setupGoogleButton();
-        });
-        } else {
+  function initGoogleSignIn() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
         window.setupGoogleButton();
-        }
+        document.querySelector('.g_id_signin')?.classList.add('visible');
+      });
+    } else {
+      window.setupGoogleButton();
+      document.querySelector('.g_id_signin')?.classList.add('visible');
     }
-    </script>
+  }
+</script>
 
     <!-- 2) GSI client calls our initGoogleSignIn when it's ready -->
     <script
@@ -103,6 +105,16 @@
             display: none;
         }
     </style>
+
+    <style>
+  /* Temporary fix for Google button flash */
+  .g_id_signin {
+    visibility: hidden;
+  }
+  .g_id_signin.visible {
+    visibility: visible;
+  }
+</style>
 </head>
 
 <body class="index-page bg-white min-h-screen">
@@ -124,9 +136,9 @@
         </div>
       </a>
 
-      <div id="gSignInWrapper">
+      <div id="googleSignInWrapper">
         <!-- Google button is visible until logged in -->
-        <div id="googleSignInButton" class="g-signin2"></div>
+        <div id="googleSignInButton" class="hidden"></div>
 
         <!-- user-dropdown hidden until logged in -->
         <div class="user-dropdown hidden">

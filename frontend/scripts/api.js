@@ -147,19 +147,3 @@ export async function updateAnalysisHTML(userId, analysisId, html, isBasic = fal
   if (!res.ok) throw new Error('Update failed');
   return res.json();
 }
-
-/**
- * Gets all transactions for a user
- * @param {string} userId - User ID from auth
- * @returns {Promise} Resolves with array of transactions
- */
-export async function getUserTransactions(userId) {
-  try {
-    const res = await fetch(`/api/user-transactions/${userId}`);
-    if (!res.ok) throw new Error('Failed to fetch transactions');
-    return await res.json();
-  } catch (error) {
-    console.error('Failed to get transactions:', error);
-    throw error;
-  }
-}

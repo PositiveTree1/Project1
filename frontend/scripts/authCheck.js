@@ -66,6 +66,12 @@ export function renderAuthUI() {
     }
 }
 
+function clearUserSession() {
+    ['user', 'userId', 'userCredits', 'isLoggedIn', 'googleAuthToken'].forEach(key => {
+        localStorage.removeItem(key);
+    });
+}
+
 export function setupUserDropdown() {
     const userAvatar = document.getElementById('userAvatar');
     const dropdownMenu = document.querySelector('.dropdown-menu');
@@ -86,13 +92,15 @@ export function setupUserDropdown() {
 
     if (logoutButton) {
         logoutButton.addEventListener('click', () => {
-            localStorage.removeItem('userId');
-            localStorage.removeItem('isLoggedIn');
-            localStorage.removeItem('googleAuthToken');
+            localStorage.removeItem('user');
+            localStorage.removeItem('userCredits');
+            // completely clear the session:
+            ['user','userId','userCredits','isLoggedIn','googleAuthToken'].forEach(k => localStorage.removeItem(k));
             renderAuthUI();
+            clearUserSession();
             document.querySelector('.dropdown-menu')?.classList.remove('show');
-            // Redirect to landing page after logout
             window.location.href = 'index.html';
+            document.dispatchEvent(new Event('authChange'));
         });
     }
 }
@@ -116,19 +124,19 @@ export function setupGoogleButton() {
     google.accounts.id.initialize({
         client_id: '969099711725-hldrjpjo3le920chng1ethgbbc71vald.apps.googleusercontent.com',
         callback: handleCredentialResponse,
-        ux_mode: 'popup'
+        ux_mode: 'popup',
+        prompt_parent_id: 'googleSignInButton'
     });
 
     const mainBtn = document.getElementById('googleSignInButton');
      if (mainBtn) {
-        const isMobile = window.matchMedia('(max-width: 768px)').matches;
         
         google.accounts.id.renderButton(mainBtn, {
             theme: 'outline',
             size: 'large',
             text:  'signin',
             shape: 'pill',
-            width: isMobile ? '120px' : '200px'
+            width:'120px'
         });
     }
 
@@ -157,6 +165,18 @@ export async function handleCredentialResponse(resp) {
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('isLoggedIn', 'true');
     localStorage.setItem('googleAuthToken', resp.credential);
+
+    // → Save the user record (including email) on the server:
+    try {
+      await fetch('/api/verify-google-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resp.credential })
+      });
+    } catch (e) {
+      console.error('Failed to verify Google token:', e);
+      // proceed anyway
+    }
   
     try {
         const r1 = await fetch(`/api/user-credits/${user.sub}`);
@@ -167,7 +187,7 @@ export async function handleCredentialResponse(resp) {
             const r2 = await fetch('/api/update-credits', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.sub, amount: 5 })
+                body: JSON.stringify({ userId: user.sub, amount: 0 })
             });
             const json2 = await r2.json();
             credits = json2.credits;
@@ -180,6 +200,8 @@ export async function handleCredentialResponse(resp) {
   
         // Redirect to dashboard after successful sign-in
         window.location.href = 'dashboard.html';
+        // let everyone know auth changed (so parallax.js can hide the AI toggle)
+        document.dispatchEvent(new Event('authChange'));
     } catch (err) {
         console.error('Error in credential response:', err);
         renderAuthUI();

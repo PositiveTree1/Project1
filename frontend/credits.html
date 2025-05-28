@@ -108,7 +108,7 @@
 
       <div id="gSignInWrapper">
         <!-- Google button is visible until logged in -->
-        <div id="googleSignInButton" class="g-signin2"></div>
+        <div id="googleSignInButton" class="hidden"></div>
 
         <!-- user-dropdown hidden until logged in -->
         <div class="user-dropdown hidden">
@@ -155,7 +155,7 @@
             <li>✔ Fix issues within your chats and relationships</li>
           </ul>
         </div>
-        <button class="cta-button select-plan" data-plan="basic" data-amount="60" data-price="4.99">Get Started</button>
+        <button class="cta-button select-plan" data-plan="basic" data-amount="40" data-price="3.99">Get Started</button>
       </div>
 
       <!-- Popular Plan -->
@@ -174,7 +174,7 @@
             <li>✔ Fix issues within your chats and relationships</li>
           </ul>
         </div>
-        <button class="cta-button select-plan" data-plan="power" data-amount="120" data-price="6.99">Get Started</button>
+        <button class="cta-button select-plan" data-plan="power" data-amount="95" data-price="6.49">Get Started</button>
       </div>
 
       <!-- Premium Plan -->
@@ -191,7 +191,7 @@
             <li>✔ Everything in the Basic pack</li>
           </ul>
         </div>
-        <button class="cta-button select-plan" data-plan="premium" data-amount="200" data-price="11.99">Get Started</button>
+        <button class="cta-button select-plan" data-plan="premium" data-amount="170" data-price="9.99">Get Started</button>
       </div>
     </div>
 
@@ -399,6 +399,31 @@
         console.error('Error checking payment status:', error);
       }
     }
+
+     async function refreshCreditBalance() {
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/user-credits/${userId}`);
+      const { credits } = await res.json();
+      localStorage.setItem('userCredits', credits);
+      document.getElementById('currentBalance').textContent = credits;
+      document.getElementById('creditCount').textContent  = credits;
+    } catch (err) {
+      console.error('Failed to fetch credits:', err);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // 1) refresh from server
+    refreshCreditBalance();
+
+    // 2) existing logic
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    if (!isLoggedIn) {
+      window.location.href = 'index.html';
+    }
+  });
 
     // Update credit balance display
     function updateCreditBalance(creditsToAdd = 0) {

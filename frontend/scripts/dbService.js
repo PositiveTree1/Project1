@@ -23,15 +23,3 @@ export async function getUserAnalyses() {
     }
 }
 
-export async function getUserTransactions() {
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user?.sub) return [];
-    
-    try {
-        const response = await fetch(`/api/user-transactions/${user.sub}`);
-        return await response.json();
-    } catch (error) {
-        console.error("Fetch failed:", error);
-        return [];
-    }
-}
