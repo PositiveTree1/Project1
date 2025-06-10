@@ -123,6 +123,9 @@ export function initFileProcessor() {
         document.getElementById('fileName').textContent = selectedFile.name;
     });
 }
+
+const isLowMemory = navigator.deviceMemory && navigator.deviceMemory < 1;
+
 export async function processSelectedFile() {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const aiToggle = document.getElementById('aiToggle');
@@ -161,18 +164,7 @@ export async function processSelectedFile() {
     const stats = processChatLog(processedText).stats;
     const isGroupChat = Object.keys(stats).length > 2;
     
-    if (!isGroupChat && user.sub && aiToggle?.checked) {
-        const needed = window.currentCreditsNeeded || 1;
-        const credits = await checkUserCredits(user.sub);
-
-        if (credits < needed) {
-            showNoCreditsPopup(needed, credits); // Pass values for better UX
-            return;
-        }
-    }
-
-    
-    // Now process the file normally
+    // Now process the file normally regardless of credits
     const reader = new FileReader();
     return new Promise((resolve, reject) => {
         reader.onload = async function(event) {
@@ -354,10 +346,7 @@ function showGroupChatNoAIPopup() {
 
 function processChatLogFile(text) {
     const result = processChatLog(text);
-    if (result === false) {
-        // too short → we already showed the popup → just stop here
-        return false;
-    }
+    
 
     const isGroupChat = Object.keys(result.stats).length > 2;
     
@@ -368,11 +357,26 @@ function processChatLogFile(text) {
         }
         
     } else {
-        
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const aiToggle = document.getElementById('aiToggle');
+        
+        // Only show "Analysis Arriving" if they have enough credits
         if (user.sub && aiToggle?.checked) {
-            showAnalysisArrivingPopup();
+            // Check credits first
+            (async () => {
+                try {
+                    const creditResp = await fetch(`/api/user-credits/${user.sub}`);
+                    const { credits = 0 } = await creditResp.json();
+                    const needed = window.currentCreditsNeeded || 1;
+                    
+                    if (credits >= needed) {
+                        showAnalysisArrivingPopup();
+                    }
+                    // If not enough credits, the no credits popup will be shown elsewhere
+                } catch (error) {
+                    console.error('Error checking credits:', error);
+                }
+            })();
         }
     }
     // Initialize colors if not already initialized
@@ -487,9 +491,7 @@ function processChatLogFile(text) {
             if (people.length === 2) {
                 renderConvoStats(text);
             }
-            if (Object.keys(stats).length === 2 && window.engagementData) {
-                renderEngagementChart(engagementData, Object.keys(stats));
-            }
+            
 
             // Add this with the other render calls
             if (window.renderStreakStats) renderStreakStats(streakStats);
@@ -553,11 +555,7 @@ function processChatLogFile(text) {
                 window.currentAnalysisId = resp.id;
                 console.log('Analysis saved with ID =', resp.id);
 
-                // Show popup only if AI is not enabled
-                const aiToggle = document.getElementById('aiToggle');
-                if (!aiToggle?.checked && !window.skipSavedPopup) {
-                    showAnalysisSavedPopup();
-                }
+                
 
             } catch (err) {
                 console.error('Could not save analysis HTML:', err);
@@ -680,19 +678,7 @@ function processChatLog(text) {
         }
     });
 
-    // Check if the chat is too short
-    const minDays = 30;
-    const minMessagesRequired = 100;
-    if (startDate && endDate) {
-      const daysDifference = (endDate - startDate) / (1000 * 60 * 60 * 24);
-      if (daysDifference < minDays || validMessageCount < minMessagesRequired) {
-        showChatTooShortPopup();
-        return false;    // ← stop here, no throw
-      }
-    } else {
-      showChatTooShortPopup();
-      return false;      // ← stop here, no throw
-    }
+    
 
     const columnChartData = generateColumnChartData(messageCounts, startDate, endDate);
     const totalDays = allDays.size;
@@ -1081,8 +1067,9 @@ function calculateChatFocus(text, senders) {
 
             const nameA = senders[0].toLowerCase();
             const nameB = senders[1].toLowerCase();
-            const isAboutSelf = /\b(i\s|i'm\s|im\s|i'll\s|i\sam\s|ill\s|i've\s|ive\s|me\s|my\s|mine\s|myself\s)\b/.test(message);
-            const isAboutOther = /\b(you\s|you're\s|youre\s|ur\s|your\s|yourself\s)\b/.test(message);
+            const isAboutSelf = /\b(i\s|i'm|im|i’ll|i will|i am|i've|ive|i have|i do|i did|i was|i feel|i think|me|my|mine|myself|i want|i need|i can't|i cannot|i don't|i wont|i shouldn't|i hate|i like|i love|i prefer|i hope|i believe|i guess|i suppose|i assume|i wonder|i know|i understand|i see|i thought|i wish)\b/i.test(message);
+            const isAboutOther = /\b(you\s|you're\s|you are\s|youre\s|you'll\s|you will\s|you've\s|you have\s|you do\s|you did\s|you were\s|you feel\s|you think\s|ur\s|your\s|yours\s|yourself\s|you want\s|you need\s|you can't\s|you cannot\s|you don't\s|you shouldn’t\s|you hate\s|you like\s|you love\s|you prefer\s|you hope\s|you believe\s|you guess\s|you suppose\s|you assume\s|you wonder\s|you know\s|you understand\s|you see\s|you thought\s|you wish\s)/i.test(message);
+
 
             let focus = null;
             if (sender === senders[0]) {
@@ -1684,53 +1671,26 @@ export function calculateResponseTimes(text) {
         ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.*)/
         : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.*)/;
 
-
-
     const closingPatterns = [
-        /^bye\b/i,
-        /^goodbye\b/i,
-        /\bthanks?\b/i,
-        /\bthank you\b/i,
-        /\bsee you\b/i,
-        /\bttyl\b/i,
-        /\bgood night\b/i,
-        /\bgood morning\b/i,
-        /\bgood afternoon\b/i,
-        /later\b/i,
-        /\bcatch you later\b/i,
-        /\bsee you later\b/i,
-        /\bgn\b/i,
-        /\bnight\b/i,
-        /\bbye for now\b/i,
-        /\bciao\b/i,
-        /\bcheers\b/i,
-        /\bpeace\b/i,
-        /\bOk\b/i,
-        /\bAlright\b/i,
-        /\bSure\b/i,
-        /\b👌\b/i,
-        /\b👍\b/i,
-        /\bthx\b/i,
-        /\bk\b/i,
-        /\bkk\b/i,
-        /\bgot it\b/i,
-        /\byes\b/i,
-        /😘/  // Added kissing emoji
+        /^bye\b/i, /^goodbye\b/i, /\bthanks?\b/i, /\bthank you\b/i, /\bsee you\b/i,
+        /\bttyl\b/i, /\bgood night\b/i, /\bgood morning\b/i, /\bgood afternoon\b/i,
+        /later\b/i, /\bcatch you later\b/i, /\bsee you later\b/i, /\bgn\b/i, /\bnight\b/i,
+        /\bbye for now\b/i, /\bciao\b/i, /\bcheers\b/i, /\bpeace\b/i, /\bOk\b/i, /\bAlright\b/i,
+        /\bSure\b/i, /\b👌\b/i, /\b👍\b/i, /\bthx\b/i, /\bk\b/i, /\bkk\b/i, /\bgot it\b/i,
+        /\byes\b/i, /😘/
     ];
 
     const maxResponseThreshold = 5 * 24 * 60 * 60 * 1000; // 5 days in ms
-
     const stats = {};
-    let prevSender = null;
-    let prevTimestamp = null;
-    let prevContent = null;
+    const messages = [];
 
+    // Step 1: Parse all messages
     for (const line of lines) {
         const match = line.match(regex);
         if (!match) continue;
 
-        const day = window.dateFormat === 'US' ? match[2] : match[1];
-        const month = window.dateFormat === 'US' ? match[1] : match[2];
+        const day = window.dateFormat === 'US' ? match[2].padStart(2, '0') : match[1].padStart(2, '0');
+        const month = window.dateFormat === 'US' ? match[1].padStart(2, '0') : match[2].padStart(2, '0');
         const year = match[3];
         const hour = match[4].padStart(2, '0');
         const minute = match[5].padStart(2, '0');
@@ -1738,10 +1698,21 @@ export function calculateResponseTimes(text) {
         const sender = match[7].trim();
         const content = match[8].trim();
 
-        const timestamp = new Date(
-            `${year}-${month}-${day}T${hour}:${minute}:${second}`
-        ).getTime();
+        const timestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
+        if (!isNaN(timestamp)) {
+            messages.push({ sender, content, timestamp });
+        }
+    }
 
+    // Step 2: Sort messages by timestamp to ensure chronological order
+    messages.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Step 3: Analyze response times
+    let prevSender = null;
+    let prevTimestamp = null;
+    let prevContent = null;
+
+    for (const { sender, content, timestamp } of messages) {
         if (
             prevSender &&
             sender !== prevSender &&
@@ -1750,7 +1721,7 @@ export function calculateResponseTimes(text) {
             const diffMs = timestamp - prevTimestamp;
             const diffMinutes = diffMs / (1000 * 60);
 
-            if (diffMs <= maxResponseThreshold) {
+            if (diffMs > 0 && diffMs <= maxResponseThreshold) {
                 if (!stats[prevSender]) {
                     stats[prevSender] = { totalTime: 0, count: 0 };
                 }
@@ -1758,7 +1729,6 @@ export function calculateResponseTimes(text) {
                 stats[prevSender].totalTime += diffMinutes;
                 stats[prevSender].count++;
             }
-
         }
 
         prevSender = sender;
@@ -1766,6 +1736,7 @@ export function calculateResponseTimes(text) {
         prevContent = content;
     }
 
+    // Step 4: Calculate average times
     const simplified = {};
     for (const [sender, data] of Object.entries(stats)) {
         const avg = data.count > 0 ? Math.round(data.totalTime / data.count) : 0;
@@ -1774,6 +1745,7 @@ export function calculateResponseTimes(text) {
 
     return simplified;
 }
+
 
 function createDonutSegment(cx, cy, r_outer, r_inner, startAngle, endAngle, color) {
     const startRad = (startAngle - 90) * Math.PI / 180;
@@ -2033,7 +2005,7 @@ respCont.className = "ai-results-container analysis-result";
 
 const raSec = document.createElement("div");
 raSec.className = "ai-section";
-raSec.innerHTML = `<h3>Response Analysis</h3>`;
+raSec.innerHTML = `<h3>Response Times</h3>`;
 
 const raA = data.responseAnalysis?.[nameA];
 const raB = data.responseAnalysis?.[nameB];
@@ -2248,6 +2220,53 @@ aiSection.appendChild(respCont);
         // Append the styled container to the AI section
         aiSection.appendChild(focusContainer);
     }
+
+    // Add Engagement Chart (right after chat focus)
+if (window.engagementData) {
+    const engagementContainer = document.createElement("div");
+    engagementContainer.className = "ai-results-container analysis-result";
+    
+    const nameA = originalNames?.personA || (data.participants?.[0]?.name || "Participant A");
+    const nameB = originalNames?.personB || (data.participants?.[1]?.name || "Participant B");
+    
+    engagementContainer.innerHTML = `
+        <div class="ai-section">
+            <h3>Who is the most engaged during conversations?</h3>
+            <div class="analysis-content">
+                <div class="analysis-text">
+                    <p>${nameA} was more engaged in ${window.engagementData.participant1.toFixed(1)}% of conversations, 
+                    while ${nameB} was more engaged in ${window.engagementData.participant2.toFixed(1)}% of conversations.</p>
+                </div>
+                <div class="analysis-chart">
+                    ${createDonutChart(
+                        window.engagementData.participant1,
+                        window.engagementData.participant2,
+                        window.colors[nameA] || '#3d9c7d',
+                        window.colors[nameB] || '#ff6b6b'
+                    )}
+                </div>
+            </div>
+            <div class="engagement-counts">
+                <div class="engagement-count-container">
+                    <div class="engagement-count">
+                        <span class="engagement-color" style="background-color: ${window.colors[nameA] || '#3d9c7d'}"></span>
+                        <span class="label">${nameA}:</span>
+                        <span class="percentage">${window.engagementData.participant1.toFixed(1)}%</span>
+                    </div>
+                </div>
+                <div class="engagement-count-container">
+                    <div class="engagement-count">
+                        <span class="engagement-color" style="background-color: ${window.colors[nameB] || '#ff6b6b'}"></span>
+                        <span class="label">${nameB}:</span>
+                        <span class="percentage">${window.engagementData.participant2.toFixed(1)}%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    aiSection.appendChild(engagementContainer);
+}
 
 
     let participantA = null;
@@ -2473,9 +2492,23 @@ async function getUncompressedTextSize(file) {
 let aiClickTimeout = null;
 // Replace your existing handleAIClick with this:
 
+
+let isProcessingAI = false;
+
 async function handleAIClick() {
+
+    if (isProcessingAI) return;
+    isProcessingAI = true;
+
+
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
     if (!isLoggedIn) return;
+
+    const processButton = document.getElementById('processButton');
+    if (processButton) {
+        processButton.disabled = true;
+        processButton.classList.add('processing');
+    }
 
     const user = JSON.parse(localStorage.getItem('user') || {});
     const aiToggle = document.getElementById('aiToggle');
@@ -2536,7 +2569,13 @@ async function handleAIClick() {
         } catch (err) {
             console.error('AI analysis failed:', err);
             renderAIError(err.message);
+        } finally {
+            isProcessingAI = false;
+        if (processButton) {
+            processButton.disabled = false;
+            processButton.classList.remove('processing');
         }
+    }
     };
 
     if (file.name.endsWith('.zip')) {
@@ -2611,30 +2650,463 @@ function renderAIAnalysisSection() {
         const aiToggle = document.getElementById('aiToggle');
         const shouldShowAI = aiToggle ? aiToggle.checked : true;
         
-        // When signed in: show loading state only if toggle is on
-        const analysisContainer = document.createElement("div");
-        analysisContainer.className = "ai-analysis-container";
-        analysisContainer.style.display = shouldShowAI ? 'block' : 'none';
+        // Check user credits
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const credits = parseInt(localStorage.getItem('userCredits') || '0', 10);
+        const needed = window.currentCreditsNeeded || 1;
         
-        if (shouldShowAI) {
+        if (shouldShowAI && credits >= needed) {
+            // Only show loading container if they have enough credits
+            const analysisContainer = document.createElement("div");
+            analysisContainer.className = "ai-analysis-container";
             analysisContainer.innerHTML = `
                 <div id="aiLoadingContainer" class="ai-results-container loading">
                     <div class="loading-spinner"></div>
                     <div class="loading-text">Analyzing with AI...</div>
                 </div>
             `;
+            aiSection.appendChild(analysisContainer);
             
             // Auto-start the AI analysis after a short delay
             setTimeout(() => {
                 handleAIClick();
             }, 500);
         } else {
-        // Add encouragement container
-        const encouragementContainer = createAIEncouragementContainer();
-        aiSection.appendChild(encouragementContainer);
-    }
+            aiSection.innerHTML = `
+            <h2 class="title gradient-text">Deep AI</h2>
+            <div class="ai-analysis-container">
+                <!-- Overall Connection and Evolution -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Overall Connection</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p><strong>Close Friends</strong></p>
+                                <p>The chat log reveals a long-standing friendship with a high degree of familiarity, inside jokes, shared experiences, and mutual support, even amidst playful teasing and occasional conflict.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-section">
+                        <h3>Evolution</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p>Initially, the interaction centers around a shared concern about a school-related event. As the chat progresses, the communication becomes more casual and playful, marked by frequent use of emojis and inside jokes. There are periods of intense engagement, followed by longer gaps in communication. Later exchanges delve into more personal matters, including relationship advice and emotional support. The final stages show a return to more casual banter, demonstrating the resilience of their friendship.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>You don't have enough credits for AI analysis</p>
+                            <a href="/credits.html" class="buy-credits-button">Buy Credits</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Chat Overview -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Chat Overview</h3>
+                        <div class="blurred-background">
+                            <div class="blurred-content">
+                                <p>The conversation spans several months and covers a wide range of topics, including school-related events (tests, homework, teachers), shared activities (gaming, sleepovers), personal struggles (challenges, relationships), and inside jokes. The overall mood fluctuates between playful banter, serious discussions, and moments of frustration. Both participants are highly engaged, with frequent exchanges and multimedia sharing. Recurring themes include their competitive nature, anxieties about school performance, and their complex relationship dynamics with other individuals in their social circle. A significant portion of the conversation revolves around a self-imposed challenge to abstain from a certain activity, and the subsequent reactions and support between the two.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>You don't have enough credits for AI analysis</p>
+                            <a href="/credits.html" class="buy-credits-button">Buy Credits</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Response Analysis -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Response Times</h3>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p><strong>${person1}:</strong> Typically responds within 15-30 minutes, with occasional faster replies during active conversations. Shows consistent engagement patterns throughout the day.</p>
+                            </div>
+                            <div class="analysis-response-time blurred-content">
+                                <span class="label">Avg resp:</span>
+                                <span class="time">17</span>
+                                <span class="unit">min</span>
+                            </div>
+                        </div>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p><strong>${person2}:</strong> Response times vary more significantly, from immediate replies to several hours. Most active in evenings and weekends.</p>
+                            </div>
+                            <div class="analysis-response-time blurred-content">
+                                <span class="label">Avg resp:</span>
+                                <span class="time">42</span>
+                                <span class="unit">min</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>You don't have enough credits for AI analysis</p>
+                            <a href="/credits.html" class="buy-credits-button">Buy Credits</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Conversation Dynamics -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Conversation Dynamics</h3>
+                        <div class="sub-section">
+                            <h4>Who initiates more conversations?</h4>
+                            <div class="analysis-content">
+                                <div class="analysis-text blurred-content">
+                                    <p>While Anatole initiates slightly more conversations, the difference is not substantial. Both participants seem comfortable initiating conversations, suggesting a balanced dynamic.</p>
+                                </div>
+                                <div class="analysis-chart strong-chart-blur">
+                                    ${createDonutChart(
+                                        Math.floor(Math.random() * 61) + 20,
+                                        Math.floor(Math.random() * 61) + 20,
+                                        window.colors[person1] || '#3d9c7d',
+                                        window.colors[person2] || '#ff6b6b'
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sub-section">
+                            <h4>Who ends more conversations?</h4>
+                            <div class="analysis-content">
+                                <div class="analysis-text blurred-content">
+                                    <p>Anatole ends conversations slightly more often, often due to lack of response from Jamz. However, both participants contribute to the natural conclusion of conversations.</p>
+                                </div>
+                                <div class="analysis-chart strong-chart-blur">
+                                    ${createDonutChart(
+                                        Math.floor(Math.random() * 61) + 20,
+                                        Math.floor(Math.random() * 61) + 20,
+                                        window.colors[person1] || '#3d9c7d',
+                                        window.colors[person2] || '#ff6b6b'
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>You don't have enough credits for AI analysis</p>
+                            <a href="/credits.html" class="buy-credits-button">Buy Credits</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Emotional Heatmap -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Emotional Heatmap</h3>
+                        <div class="emotional-heatmap-container">
+                            <div class="heatmap-legend">
+                                <div class="legend-item">
+                                    <div class="legend-color negative"></div>
+                                    <span>Negative</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color neutral"></div>
+                                    <span>Neutral</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color positive"></div>
+                                    <span>Positive</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color love"></div>
+                                    <span>Love</span>
+                                </div>
+                            </div>
+                            <div class="heatmap-bars strong-chart-blur">
+                                ${[3, 5, 7, 8, 6, 4, 9, 7, 6, 8].map(score => {
+                                    let color;
+                                    if (score <= 2) color = `rgb(255, ${Math.round(80 + 100 * (score/2))}, 0)`;
+                                    else if (score <= 4) color = `rgb(${Math.round(255 - 55 * ((score-2)/2))}, ${Math.round(180 + 50 * ((score-2)/2))}, 100)`;
+                                    else if (score <= 6) {
+                                        const grey = Math.round(160 + (score - 4) * 20);
+                                        color = `rgb(${grey}, ${grey}, ${grey})`;
+                                    }
+                                    else if (score <= 8) color = `rgb(${Math.round(160 - 80 * ((score-6)/2))}, ${Math.round(200 + 55 * ((score-6)/2))}, 160)`;
+                                    else if (score < 10) color = `rgb(${Math.round(160 + 40 * ((score-8)/2))}, ${Math.round(255 - 100 * ((score-8)/2))}, ${Math.round(200 + 30 * ((score-8)/2))})`;
+                                    else color = '#ff69b4';
+                                    return `<div class="heatmap-bar" style="background-color: ${color}"></div>`;
+                                }).join('')}
+                            </div>
+                            <div class="heatmap-timeline">
+                                <span>Start</span>
+                                <span>End</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>You don't have enough credits for AI analysis</p>
+                            <a href="/credits.html" class="buy-credits-button">Buy Credits</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Chat Focus -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Who the chat focuses on the most?</h3>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p>${person1} focuses on ${person2} 62% of the time, while ${person2} focuses on ${person1} 38% of the time.</p>
+                            </div>
+                            <div class="analysis-chart strong-chart-blur">
+                                ${createDonutChart(
+                                    38,
+                                    62,
+                                    window.colors[person1] || '#3d9c7d',
+                                    window.colors[person2] || '#ff6b6b'
+                                )}
+                            </div>
+                        </div>
+                        <div class="focus-counts blurred-content">
+                            <div class="focus-count-container">
+                                <div class="focus-count">
+                                    <span class="focus-color" style="background-color: ${window.colors[person1] || '#3d9c7d'}"></span>
+                                    <span class="label">${person1}:</span>
+                                    <span class="percentage">38%</span>
+                                </div>
+                            </div>
+                            <div class="focus-count-container">
+                                <div class="focus-count">
+                                    <span class="focus-color" style="background-color: ${window.colors[person2] || '#ff6b6b'}"></span>
+                                    <span class="label">${person2}:</span>
+                                    <span class="percentage">62%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>You don't have enough credits for AI analysis</p>
+                            <a href="/credits.html" class="buy-credits-button">Buy Credits</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Engagement Analysis -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Who is the most engaged during conversations?</h3>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p>${person1} was more engaged in 55% of conversations, while ${person2} was more engaged in 45% of conversations.</p>
+                            </div>
+                            <div class="analysis-chart strong-chart-blur">
+                                ${createDonutChart(
+                                    55,
+                                    45,
+                                    window.colors[person1] || '#3d9c7d',
+                                    window.colors[person2] || '#ff6b6b'
+                                )}
+                            </div>
+                        </div>
+                        <div class="engagement-counts blurred-content">
+                            <div class="engagement-count-container">
+                                <div class="engagement-count">
+                                    <span class="engagement-color" style="background-color: ${window.colors[person1] || '#3d9c7d'}"></span>
+                                    <span class="label">${person1}:</span>
+                                    <span class="percentage">55%</span>
+                                </div>
+                            </div>
+                            <div class="engagement-count-container">
+                                <div class="engagement-count">
+                                    <span class="engagement-color" style="background-color: ${window.colors[person2] || '#ff6b6b'}"></span>
+                                    <span class="label">${person2}:</span>
+                                    <span class="percentage">45%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    ${isLoggedIn ? `
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>${credits < needed ? 'You don\'t have enough credits for AI analysis' : 'Sign in to see full analysis'}</p>
+                            ${credits < needed ? '<a href="/credits.html" class="buy-credits-button">Buy Credits</a>' : '<div id="aiSigninButton14" class="g-signin2"></div>'}
+                        </div>
+                    </div>
+                    ` : `
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton14" class="g-signin2"></div>
+                        </div>
+                    </div>
+                    `}
+                </div>
+                <!-- Ghosting Analysis -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Who ghosted more often?</h3>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p>Analysis based on 43 detected ghosting incidents where a message was unanswered for 3+ hours.</p>
+                            </div>
+                            <div class="analysis-chart strong-chart-blur">
+                                ${(() => {
+                                    const p = Math.floor(Math.random() * 61) + 20;
+                                    return createDonutChart(
+                                        p,
+                                        100 - p,
+                                        window.colors[person1] || '#3d9c7d',
+                                        window.colors[person2] || '#ff6b6b'
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                        <div class="ghosting-counts blurred-content">
+                            <p>${person1}: 5 times</p>
+                            <p>${person2}: 3 times</p>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>You don't have enough credits for AI analysis</p>
+                            <a href="/credits.html" class="buy-credits-button">Buy Credits</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Participant 1 Analysis -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section participant-analysis">
+                        <h3>${person1}'s Analysis</h3>
+                        <div>
+                            <div class="interest-level">
+                                Interest: <span class="interest-level-score blurred-content">7/10</span>
+                            </div>
+                            <div class="communication-style">
+                                <h4>Communication Style</h4>
+                                <div class="blurred-content">
+                                    <p>Enthusiastic, playful, and proactive. Uses informal language and inside jokes frequently. Shows a willingness to plan and organize activities.
 
-        aiSection.appendChild(analysisContainer);
+Displays a high level of trust and emotional depth through shared vulnerabilities, support, and concern for Arthur's well-being.</p>
+                                </div>
+                            </div>
+                            <div class="flags-section">
+                                <div class="green-flags">
+                                    <h4>Green Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item green-flag">
+                                            <strong>Proactive Planning: Alexandre frequently initiates plans and activities, demonstrating initiative and a desire to spend time with Arthur.</strong> Example green flag.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="green-flags">
+                                    <h4>Green Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item green-flag">
+                                            <strong>Emotional Support: Alexandre offers support and understanding during times of stress or difficulty for Arthur, showing empathy and care.</strong> Example green flag.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="red-flags">
+                                    <h4>Red Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item red-flag">
+                                            <strong>Overreaction: Alexandre admits to overreacting at times, suggesting a need for better emotional regulation.</strong> Example red flag.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="red-flags">
+                                    <h4>Red Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item red-flag">
+                                            <strong>Impulsivity: Alexandre's actions, such as the incident with the 5ème student, suggest a tendency towards impulsive behavior.</strong> Example red flag.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="relationship-tip">
+                                <h4>Relationship Tip</h4>
+                                <div class="blurred-content">
+                                    <div class="tip-item">
+                                        <strong>Suggestion:</strong>
+                                        <p>Mindfulness and Communication: Alexandre should focus on practicing mindfulness and improving communication skills to manage impulsive reactions and express emotions more constructively.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>You don't have enough credits for AI analysis</p>
+                            <a href="/credits.html" class="buy-credits-button">Buy Credits</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- Participant 2 Analysis -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section participant-analysis">
+                        <h3>${person2}'s Analysis</h3>
+                        <div>
+                            <div class="interest-level">
+                                Interest: <span class="interest-level-score blurred-content">7/10</span>
+                            </div>
+                            <div class="communication-style">
+                                <h4>Communication Style</h4>
+                                <div class="blurred-content">
+                                    <p>Playful, responsive, and collaborative. Shares similar informal language and inside jokes as Alexandre. Contributes equally to planning and organizing activities.
+
+Demonstrates trust and emotional depth through shared vulnerabilities, support, and concern for Alexandre's well-being.</p>
+                                </div>
+                            </div>
+                            <div class="flags-section">
+                                <div class="green-flags">
+                                    <h4>Green Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item green-flag">
+                                            <strong>Collaborative Spirit: Arthur actively participates in planning and executing activities with Alexandre, showing a willingness to collaborate and compromise.</strong> Example green flag.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="green-flags">
+                                    <h4>Green Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item green-flag">
+                                            <strong>Honest Communication: Arthur communicates openly and honestly about his feelings and experiences, fostering a strong foundation of trust.</strong> Example green flag.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="red-flags">
+                                    <h4>Red Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item red-flag">
+                                            <strong>Fear of Conflict: Arthur's avoidance of conflict with Alexandre's father might indicate a reluctance to address difficult situations directly.</strong> Example red flag.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="red-flags">
+                                    <h4>Red Flags</h4>
+                                    <div class="blurred-content">
+                                        <div class="flag-item red-flag">
+                                            <strong>Impulsivity: Arthur's actions, such as the incident with the smoke inhalation, suggest a tendency towards impulsive behavior.</strong> Example red flag.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="relationship-tip">
+                                <h4>Relationship Tip</h4>
+                                <div class="blurred-content">
+                                    <div class="tip-item">
+                                        <strong>Suggestion:</strong>
+                                        <p>Assertiveness Training: Arthur should work on assertiveness training to improve communication in challenging situations and express needs more effectively.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>You don't have enough credits for AI analysis</p>
+                            <a href="/credits.html" class="buy-credits-button">Buy Credits</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        }
     } else {
         // When not signed in: display structured placeholders with selective blur
         aiSection.innerHTML = `
@@ -2686,7 +3158,7 @@ function renderAIAnalysisSection() {
                 <!-- Response Analysis -->
                 <div class="ai-results-container placeholder">
                     <div class="ai-section">
-                        <h3>Response Analysis</h3>
+                        <h3>Response Times</h3>
                         <div class="analysis-content">
                             <div class="analysis-text blurred-content">
                                 <p><strong>${person1}:</strong> Typically responds within 15-30 minutes, with occasional faster replies during active conversations. Shows consistent engagement patterns throughout the day.</p>
@@ -2850,6 +3322,56 @@ function renderAIAnalysisSection() {
                             <div id="aiSigninButton13" class="g-signin2"></div>
                         </div>
                     </div>
+                </div>
+                <!-- Engagement Analysis -->
+                <div class="ai-results-container placeholder">
+                    <div class="ai-section">
+                        <h3>Who is the most engaged during conversations?</h3>
+                        <div class="analysis-content">
+                            <div class="analysis-text blurred-content">
+                                <p>${person1} was more engaged in 55% of conversations, while ${person2} was more engaged in 45% of conversations.</p>
+                            </div>
+                            <div class="analysis-chart strong-chart-blur">
+                                ${createDonutChart(
+                                    55,
+                                    45,
+                                    window.colors[person1] || '#3d9c7d',
+                                    window.colors[person2] || '#ff6b6b'
+                                )}
+                            </div>
+                        </div>
+                        <div class="engagement-counts blurred-content">
+                            <div class="engagement-count-container">
+                                <div class="engagement-count">
+                                    <span class="engagement-color" style="background-color: ${window.colors[person1] || '#3d9c7d'}"></span>
+                                    <span class="label">${person1}:</span>
+                                    <span class="percentage">55%</span>
+                                </div>
+                            </div>
+                            <div class="engagement-count-container">
+                                <div class="engagement-count">
+                                    <span class="engagement-color" style="background-color: ${window.colors[person2] || '#ff6b6b'}"></span>
+                                    <span class="label">${person2}:</span>
+                                    <span class="percentage">45%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    ${isLoggedIn ? `
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>${credits < needed ? 'You don\'t have enough credits for AI analysis' : 'Sign in to see full analysis'}</p>
+                            ${credits < needed ? '<a href="/credits.html" class="buy-credits-button">Buy Credits</a>' : '<div id="aiSigninButton14" class="g-signin2"></div>'}
+                        </div>
+                    </div>
+                    ` : `
+                    <div class="ai-container-overlay">
+                        <div class="ai-container-overlay-content">
+                            <p>Sign in to see full analysis</p>
+                            <div id="aiSigninButton14" class="g-signin2"></div>
+                        </div>
+                    </div>
+                    `}
                 </div>
                 <!-- Ghosting Analysis -->
                 <div class="ai-results-container placeholder">
@@ -3276,7 +3798,7 @@ function createAIEncouragementContainer() {
         <div class="ai-results-container encouragement">
             <div class="ai-section">
                 <h3>Unlock More Insights with AI</h3>
-                <p>Enable AI analysis to get deeper insights such as red flags, response times, tips, and overviews.</p>
+                <p>Enable AI analysis to get deeper insights such as red flags, response times, tips, overview, connection styles, ghosting insights, and more.</p>
             </div>
         </div>
     `;

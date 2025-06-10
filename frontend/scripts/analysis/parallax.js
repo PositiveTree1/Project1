@@ -56,16 +56,18 @@ window.skipSavedPopup = false;
     }
 
     function startProcessing() {
-        const processButton = document.getElementById('processButton');
-        const loadingOverlay = document.querySelector('.loading-overlay');
-        
+    const processButton = document.getElementById('processButton');
+    const loadingOverlay = document.querySelector('.loading-overlay');
+    
+    if (processButton) {
         processButton.classList.add('processing');
-        loadingOverlay.classList.add('active');
         processButton.disabled = true;
-
-        const resultsSection = document.getElementById('results');
-        if (resultsSection) resultsSection.scrollIntoView({behavior: 'smooth'});
     }
+    
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('active');
+    }
+}
 
     function endProcessing() {
         const processButton = document.getElementById('processButton');
@@ -76,39 +78,152 @@ window.skipSavedPopup = false;
         processButton.disabled = false;
     }
 
-    async function processFile(useAI = false) {
-        try {
-            startProcessing();
-            // Set AI mode before processing
-            window.useAIForProcessing = useAI;
-            await window.processSelectedFile();
-        } catch (error) {
-            console.error('Error processing file:', error);
-        } finally {
+async function processFile(useAI = false) {
+    try {
+        startProcessing();
+        window.useAIForProcessing = useAI;
+
+        // Check if we have a file to process
+        if (!window.selectedFile) {
+            console.error('No file selected for processing');
             endProcessing();
+            return;
         }
-    }
 
-    function setupConsentButtons() {
-        if (agreeConsentBtn && declineConsentBtn) {
-            agreeConsentBtn.addEventListener('click', async () => {
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                if (user.sub) {
-                    await saveConsent(user.sub, true);
-                    hideConsentPopup();
-                    await processFile(true); // Process with AI
+        // Check credits if using AI
+        if (useAI) {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (user.sub) {
+                try {
+                    const creditResp = await fetch(`/api/user-credits/${user.sub}`);
+                    const { credits = 0 } = await creditResp.json();
+                    const needed = window.currentCreditsNeeded || 1;
+                    
+                    if (credits < needed) {
+                        showNoCreditsPopup(needed, credits);
+                        // Fall back to basic analysis
+                        await window.processSelectedFile(false);
+                        return;
+                    }
+                } catch (creditError) {
+                    console.error('Credit check failed:', creditError);
+                    // Fall back to basic analysis
+                    await window.processSelectedFile(false);
+                    return;
                 }
-            });
+            }
+        }
+        
+        await window.processSelectedFile(useAI);
+    } catch (error) {
+        console.error('Error processing file:', error);
+        // Ensure we always show something to the user
+        await window.processSelectedFile(false);
+    } finally {
+        endProcessing();
+    }
+}
 
-            declineConsentBtn.addEventListener('click', async () => {
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
+function showAnalysisArrivingPopup() {
+    const popup = document.createElement("div");
+    popup.className = "ai-popup";
+    popup.innerHTML = `
+        <div class="ai-popup-content">
+            <div class="ai-popup-progress">
+                <div class="ai-popup-progress-bar"></div>
+            </div>
+            <div class="ai-popup-header">
+                <h3 class="ai-popup-title">AI Analysis Arriving</h3>
+                <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
+            </div>
+            <p class="ai-popup-message">Your deep AI chat analysis is going to appear shortly.</p>
+        </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Remove the popup after animation completes
+    setTimeout(() => {
+        if (popup.parentElement) {
+            popup.parentElement.removeChild(popup);
+        }
+    }, 3000);
+    
+    // Also remove when clicking outside
+    popup.addEventListener('click', (e) => {
+        if (e.target === popup) {
+            popup.remove();
+        }
+    });
+}
+function setupConsentButtons() {
+    if (agreeConsentBtn && declineConsentBtn) {
+        agreeConsentBtn.addEventListener('click', async () => {
+            try {
+                const user = JSON.parse(localStorage.getItem('user') || {});
+                if (!user.sub) {
+                    console.error('No user ID found');
+                    hideConsentPopup();
+                    await processFile(false); // Fallback to basic
+                    return;
+                }
+
+                // Save consent and immediately proceed
+                const consentSaved = await saveConsent(user.sub, true);
+                if (!consentSaved) {
+                    console.error('Failed to save consent');
+                }
+                hideConsentPopup();
+                
+                // Show processing indicator immediately
+                startProcessing();
+                
+                // Check credits and process accordingly
+                try {
+                    const creditResp = await fetch(`/api/user-credits/${user.sub}`);
+                    const { credits = 0 } = await creditResp.json();
+                    const needed = window.currentCreditsNeeded || 1;
+                    
+                    if (credits < needed) {
+                        showNoCreditsPopup(needed, credits);
+                        // Fallback to basic analysis
+                        await processFile(false);
+                    } else {
+                        // Proceed with AI analysis
+                        await processFile(true);
+                    }
+                } catch (creditError) {
+                    console.error('Credit check failed:', creditError);
+                    // Fallback to basic analysis
+                    await processFile(false);
+                }
+            } catch (err) {
+                console.error('Consent agreement failed:', err);
+                hideConsentPopup();
+                // Fallback to basic analysis
+                await processFile(false);
+            }
+        });
+
+        declineConsentBtn.addEventListener('click', async () => {
+            try {
+                const user = JSON.parse(localStorage.getItem('user') || {});
                 if (user.sub) {
                     await saveConsent(user.sub, false);
-                    hideConsentPopup();
                 }
-            });
-        }
+                hideConsentPopup();
+                // Immediately proceed with basic analysis
+                startProcessing();
+                await processFile(false);
+            } catch (err) {
+                console.error('Consent decline failed:', err);
+                hideConsentPopup();
+                // Fallback to basic analysis
+                await processFile(false);
+            }
+        });
     }
+}
 
     function updateUploadInterface() {
         // If no file has been uploaded yet, show the drop zone (or upload buttons on mobile) 
@@ -147,64 +262,68 @@ window.skipSavedPopup = false;
 
         // 1) Whenever “Process” is clicked, show spinner, then call window.processSelectedFile()
         // Replace the existing processButton click handler with this:
-        processButton.addEventListener('click', async function(e) {e.stopPropagation();
+        processButton.addEventListener('click', async function(e) {
+        e.stopPropagation();
 
-  const fileInput = document.getElementById('fileInput');
-  if (!fileInput.files.length) {
-    alert('Please select a file first');
-    return;
-  }
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files.length) {
+            alert('Please select a file first');
+            return;
+        }
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const aiToggle = document.getElementById('aiToggle');
-  const wantsAI = aiToggle && aiToggle.checked && !window.isGroupChat;
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const aiToggle = document.getElementById('aiToggle');
+        const wantsAI = aiToggle && aiToggle.checked && !window.isGroupChat;
 
-  // Helper: run basic analysis + encouragement if needed
-  async function runBasicWithEncouragement() {
-    await processFile(false);
-    // only show encouragement if zero credits
-    if (user.sub) {
-      const resp = await fetch(`/api/user-credits/${user.sub}`);
-      const { credits = 0 } = await resp.json();
-      if (credits === 0) {
-        const results = document.getElementById('results');
-        results.appendChild(createAIEncouragementContainer());
-      }
-    }
-  }
+        async function runBasicWithEncouragement() {
+            await processFile(false);
+            // Remove any existing AI loading container if present
+            const loadingContainer = document.getElementById('aiLoadingContainer');
+            if (loadingContainer) loadingContainer.remove();
+            
+            // // Add encouragement container if not already present
+            // if (user.sub) {
+            //     const resp = await fetch(`/api/user-credits/${user.sub}`);
+            //     const { credits = 0 } = await resp.json();
+            //     if (credits === 0) {
+            //         const results = document.getElementById('results');
+            //         const existingEncouragement = results.querySelector('.encouragement');
+            //         if (!existingEncouragement) {
+            //             results.appendChild(createAIEncouragementContainer());
+            //         }
+            //     }
+            // }
+        }
 
-  // — If they want AI… —
-  if (wantsAI && user.sub) {
-    // 1) Consent
-    const hasConsented = await checkConsent(user.sub);
-    if (!hasConsented) {
-      showConsentPopup();
-      return;
-    }
+        if (wantsAI && user.sub) {
+            // 1) Consent
+            const hasConsented = await checkConsent(user.sub);
+            if (!hasConsented) {
+                showConsentPopup();
+                return; // Stop here and wait for consent decision
+            }
 
-    // 2) Credits
-    const needed = window.currentCreditsNeeded || 1;
-    const creditResp = await fetch(`/api/user-credits/${user.sub}`);
-    const { credits = 0 } = await creditResp.json();
+            // 2) Credits
+            const needed = window.currentCreditsNeeded || 1;
+            const creditResp = await fetch(`/api/user-credits/${user.sub}`);
+            const { credits = 0 } = await creditResp.json();
 
-    if (credits < needed) {
-    showNoCreditsPopup(needed, credits);
-      // not enough → fallback to basic analysis + encouragement
-      aiToggle.checked = false;
-      window.skipSavedPopup = true;  
-      await runBasicWithEncouragement();
-      window.skipSavedPopup = false;  
-      return;
-    }
+            if (credits < needed) {
+                showNoCreditsPopup(needed, credits);
+                // Fallback to basic analysis
+                aiToggle.checked = false;
+                await runBasicWithEncouragement();
+                return;
+            }
 
-    // 3) Enough credits → do AI analysis
-    await processFile(true);
-    return;
-  }
+            // 3) Enough credits → do AI analysis
+            await processFile(true);
+            return;
+        }
 
-  // — Otherwise (basic mode) — always run basic (even with zero credits)
-  await runBasicWithEncouragement();
-});
+        // — Otherwise (basic mode) — always run basic (even with zero credits)
+        await runBasicWithEncouragement();
+    });
 
 function showNoCreditsPopup(needed = 1, current = 0) {
   const popup = document.createElement("div");
@@ -429,13 +548,32 @@ function showNoCreditsPopup(needed = 1, current = 0) {
     }
 
     function setupGuideToggle() {
-        document.querySelector('.guide-toggle').addEventListener('click', () => {
-            const guideContent = document.querySelector('.guide-content');
-            const guideToggle  = document.querySelector('.guide-toggle');
-            guideContent.classList.toggle('active');
-            guideToggle.classList.toggle('active');
+    const guideToggle = document.querySelector('.guide-toggle');
+    const guideContent = document.querySelector('.guide-content');
+    
+    guideToggle.addEventListener('click', () => {
+        guideContent.classList.toggle('active');
+        guideToggle.classList.toggle('active');
+    });
+
+    // Add OS toggle functionality
+    const osToggles = document.querySelectorAll('.os-toggle');
+    osToggles.forEach(toggle => {
+        toggle.addEventListener('click', () => {
+            // Remove active class from all toggles
+            osToggles.forEach(t => t.classList.remove('active'));
+            // Add active class to clicked toggle
+            toggle.classList.add('active');
+            
+            // Show the corresponding guide steps
+            const os = toggle.dataset.os;
+            document.querySelectorAll('.guide-steps').forEach(steps => {
+                steps.style.display = 'none';
+            });
+            document.querySelector(`.${os}-steps`).style.display = 'block';
         });
-    }
+    });
+}
 
     // This popup is shown if user tries to turn on AI for a group chat
     function showGroupChatNoAIPopup() {

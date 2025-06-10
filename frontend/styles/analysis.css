@@ -3569,3 +3569,110 @@ html {
   border-radius: 0.25rem;
   margin-right: 0.5rem;
 }
+
+/* OS Toggle Styles */
+.os-toggle-container {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.os-toggle {
+    background: rgba(106, 48, 147, 0.1);
+    border: none;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--light-text);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.os-toggle.active {
+    background: var(--gradient);
+    color: white;
+    box-shadow: 0 4px 8px rgba(106, 48, 147, 0.2);
+}
+
+.guide-steps {
+    transition: opacity 0.3s ease;
+}
+
+/* Remove the guide-note entirely */
+.guide-note {
+    display: none;
+}
+
+.buy-credits-button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #3d9c7d;
+    color: white;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: bold;
+    margin-top: 15px;
+    transition: background-color 0.3s;
+}
+
+.buy-credits-button:hover {
+    background-color: #2e7d67;
+}
+
+.engagement-counts {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.engagement-count-container {
+    display: flex;
+    align-items: center;
+}
+
+.engagement-count {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.engagement-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.engagement-count .label {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.engagement-count .percentage {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+#processButton.processing {
+    position: relative;
+    color: transparent;
+}
+
+#processButton.processing::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}

@@ -135,8 +135,7 @@
       <div class="current-credits">
         <div class="credits-badge">
           <img src="assets/credit5.png" alt="Credits" class="credit-icon">
-          <span>Your current balance: <strong id="currentBalance">0</strong> credits</span>
-        </div>
+          <span>Your current balance: <strong id="currentBalance">0</strong> credits</span>        </div>
       </div>
     </div>
 
@@ -145,7 +144,8 @@
       <div class="pricing-card">
         <div class="pricing-header">
           <h3>Basic</h3>
-          <div class="price">$3.99</div>
+         <div class="price" data-usd-price="3.99"></div>
+
           <div class="credits-amount">40 Credits</div>
         </div>
         <div class="pricing-features">
@@ -155,7 +155,7 @@
             <li>✔ Fix issues within your chats and relationships</li>
           </ul>
         </div>
-        <button class="cta-button select-plan" data-plan="basic" data-amount="40" data-price="3.99">Get Started</button>
+        <button class="cta-button select-plan" data-plan="basic" data-amount="40" data-usd-price="3.99">Get Started</button>
       </div>
 
       <!-- Popular Plan -->
@@ -163,7 +163,7 @@
         <div class="popular-badge">POPULAR</div>
         <div class="pricing-header">
           <h3>Power User</h3>
-          <div class="price">$6.49</div>
+          <div class="price" data-usd-price="6.49"></div>
           <div class="credits-amount">95 Credits</div>
         </div>
         <div class="pricing-features">
@@ -174,14 +174,14 @@
             <li>✔ Fix issues within your chats and relationships</li>
           </ul>
         </div>
-        <button class="cta-button select-plan" data-plan="power" data-amount="95" data-price="6.49">Get Started</button>
+        <button class="cta-button select-plan" data-plan="power" data-amount="95" data-usd-price="6.49">Get Started</button>
       </div>
 
       <!-- Premium Plan -->
       <div class="pricing-card">
         <div class="pricing-header">
           <h3>Premium</h3>
-          <div class="price">$9.99</div>
+          <div class="price" data-usd-price="9.99"></div>
           <div class="credits-amount">170 Credits</div>
         </div>
         <div class="pricing-features">
@@ -191,7 +191,7 @@
             <li>✔ Everything in the Basic pack</li>
           </ul>
         </div>
-        <button class="cta-button select-plan" data-plan="premium" data-amount="170" data-price="9.99">Get Started</button>
+        <button class="cta-button select-plan" data-plan="premium" data-amount="170" data-usd-price="9.99">Get Started</button>
       </div>
     </div>
 
@@ -273,187 +273,197 @@
           <a href="privacyPolicy.html">Privacy Policy</a>
         </div>
       </div>
-      <p>© 2023 ConvoClarity. All rights reserved.</p>
+      <p>© 2023 chatphantom. All rights reserved.</p>
     </div>
   </footer>
 
 
-  <script>
-    // Initialize Stripe
-    const stripe = Stripe('pk_test_51RT0voHFy9ZvB1zudS4kSvVomq82JT7w7AUjbWsq7ivRI2cLgJGb4wddwaPJZgRBG3dtbDhD8AGk0oyVmVMuP9Gk00KOXcJmwh');
-    
-    // Selected plan data
-    let selectedPlan = null;
 
-    // Plan selection
+
+
+    
+
+<script>
+
+  const stripe = Stripe('pk_live_51RT0vbHxX0u6szgbLpwT76FbcrAp7VlREAHwUCcERzsVDBBHYuncpjb9pp2JxzWE5fomVJ1Muu4k48EPQ1A6Mmz8004IQgrFnP');
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    // ─── PART A: CURRENCY CONVERSION ─────────────────────────────────────────
+    // 1) Detect user’s locale → currency code
+    const locale = navigator.language || 'en-US';
+    const localeToCurrency = {
+      'en-US': 'USD', 'en-GB': 'GBP', 'fr-FR': 'EUR',
+      'de-DE': 'EUR', 'ja-JP': 'JPY', 'en-CA': 'CAD',
+      'es-ES': 'EUR', 'pt-BR': 'BRL'
+    };
+    let currency = localeToCurrency[locale] 
+                 || localeToCurrency[locale.split('-')[0]] 
+                 || 'USD';
+
+    // 2) Fetch free exchange rates
+    let rates = null;
+    try {
+      const resp = await fetch('https://api.exchangerate.host/latest?base=USD');
+      const data = await resp.json();
+      if (data && data.rates) rates = data.rates;
+    } catch (e) {
+      console.warn('Could not load rates; falling back to USD:', e);
+      rates = null;
+      currency = 'USD';
+    }
+
+    // 3) Update every .price[data-usd-price]
+    const zeroDecimal = new Set(['JPY','KRW','VND']);
+    const currencySymbols = {
+      USD: '$', EUR: '€', GBP: '£', JPY: '¥', CAD: 'CA$', BRL: 'R$'
+    };
+
+    document.querySelectorAll('.price[data-usd-price]').forEach(el => {
+      const usd = parseFloat(el.dataset.usdPrice);
+      if (currency === 'USD' || !rates || !rates[currency]) {
+        el.innerText = '$' + usd.toFixed(2);
+        el.dataset.currency = 'USD';
+        el.dataset.minorUnit = Math.round(usd * 100);
+        return;
+      }
+      const raw = usd * rates[currency];
+      let displayAmt, minorUnit;
+      if (zeroDecimal.has(currency)) {
+        displayAmt = Math.round(raw).toString();
+        minorUnit   = Math.round(raw);
+      } else {
+        displayAmt = raw.toFixed(2);
+        minorUnit   = Math.round(raw * 100);
+      }
+      const symbol = currencySymbols[currency] || (currency + ' ');
+      el.innerText = symbol + displayAmt;
+      el.dataset.currency = currency;
+      el.dataset.minorUnit = minorUnit;
+    });
+
+    // 4) Expose for later
+    window.selectedCurrency = currency;
+    window.rates = rates;
+    window.zeroDecimal = zeroDecimal;
+    window.currencySymbols = currencySymbols;
+
+    // ─── PART B: PLAN SELECTION ────────────────────────────────────────────────
+    // (1) Plan buttons: use data-usd-price instead of data-price
+    let selectedPlan = null;
     document.querySelectorAll('.select-plan').forEach(button => {
-      button.addEventListener('click', function() {
+      button.addEventListener('click', () => {
         selectedPlan = {
-          id: this.dataset.plan,
-          amount: this.dataset.amount,
-          price: this.dataset.price,
-          name: this.closest('.pricing-card').querySelector('h3').textContent
+          id: button.dataset.plan,
+          amount: button.dataset.amount,
+          price: button.dataset.usdPrice, // was dataset.price → now dataset.usdPrice
+          name: button.closest('.pricing-card').querySelector('h3').textContent
         };
-        
-        // Update selected plan display
+        console.log('Plan selected:', selectedPlan);
+
+        // highlight
         document.querySelectorAll('.pricing-card').forEach(card => {
           card.classList.remove('selected');
         });
-        this.closest('.pricing-card').classList.add('selected');
-        
-        // Update payment section
-        document.getElementById('selectedPlanName').textContent = selectedPlan.name;
-        document.getElementById('selectedPlanCredits').textContent = selectedPlan.amount + ' Credits';
-        document.getElementById('selectedPlanPrice').textContent = '$' + selectedPlan.price;
-        
-        // Show payment section
+        button.closest('.pricing-card').classList.add('selected');
+
+        // update UI
+        document.getElementById('selectedPlanName').innerText = selectedPlan.name;
+        document.getElementById('selectedPlanCredits').innerText = selectedPlan.amount + ' Credits';
+        const priceEl = document.querySelector(`.price[data-usd-price="${selectedPlan.price}"]`);
+        const symbol = priceEl ? (priceEl.innerText[0] || '$') : '$';
+        document.getElementById('selectedPlanPrice').innerText = symbol + selectedPlan.price;
+
+
         document.getElementById('paymentSection').style.display = 'block';
-        
-        // Scroll to payment section
         document.getElementById('paymentSection').scrollIntoView({ behavior: 'smooth' });
       });
     });
 
-    // Stripe Checkout
-    // In the stripe-checkout click handler:
+    // ─── PART C: STRIPE CLICK HANDLER ───────────────────────────────────────────
     document.querySelector('.stripe-checkout').addEventListener('click', async function() {
-  if (!selectedPlan) {
-    alert('Please select a plan first');
-    return;
-  }
-  
-  this.disabled = true;
-  this.textContent = 'Processing...';
-  
-  try {
-    // Get current user ID - wait for auth to be ready
-    const userId = await new Promise((resolve) => {
-      const checkUser = () => {
-        const id = localStorage.getItem('userId');
-        if (id) {
-          resolve(id);
-        } else {
-          setTimeout(checkUser, 100);
-        }
-      };
-      checkUser();
-    });
+      if (!selectedPlan) {
+        alert('Please select a plan first');
+        return;
+      }
+      this.disabled = true;
+      this.textContent = 'Processing…';
 
-    if (!userId) {
-      throw new Error('User not authenticated - please sign in');
-    }
-    
-    // Create a Checkout Session on your server
-    const response = await fetch('/create-stripe-session', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-ID': userId
-      },
-      body: JSON.stringify({
-        plan: selectedPlan.id,
-        amount: selectedPlan.amount,
-        price: selectedPlan.price,
-        name: selectedPlan.name
-      }),
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to create payment session');
-    }
-    
-    const session = await response.json();
-    
-    // Redirect to Stripe Checkout
-    const result = await stripe.redirectToCheckout({
-      sessionId: session.id
-    });
-    
-    if (result.error) {
-      throw result.error;
-    }
-  } catch (error) {
-    console.error('Error:', error);
-    alert(error.message || 'There was an error processing your payment. Please try again.');
-    this.disabled = false;
-    this.textContent = 'Pay with Card';
-  }
-});
-
-
-    // Simplified payment status check
-    async function checkPaymentStatus(orderId) {
       try {
-        const response = await fetch(`/check-payment-status?orderId=${orderId}`);
-        const result = await response.json();
-        
-        if (result.status === 'COMPLETED') {
-          // Update user's credit balance
-          updateCreditBalance(parseInt(selectedPlan.amount));
-          alert('Payment successful! Your credits have been added to your account.');
-        } else if (result.status === 'PENDING') {
-          // Check again after delay
-          setTimeout(() => checkPaymentStatus(orderId), 2000);
+        // 1) Wait for GoogleAuth userId
+        const userId = await new Promise(resolve => {
+          const check = () => {
+            const id = localStorage.getItem('userId');
+            if (id) resolve(id);
+            else setTimeout(check, 100);
+          };
+          check();
+        });
+        if (!userId) throw new Error('User not authenticated');
+
+        // 2) Compute stripeAmount
+        const usdPrice = parseFloat(selectedPlan.price);
+        const currency = window.selectedCurrency || 'USD';
+        let stripeAmount;
+        if (currency === 'USD') {
+          stripeAmount = Math.round(usdPrice * 100);
+        } else {
+          // Find matching <div class="price"> so we get dataset.minorUnit
+          const priceEl = Array.from(document.querySelectorAll('.price[data-usd-price]'))
+                            .find(el => el.dataset.usdPrice === selectedPlan.price);
+          stripeAmount = priceEl
+                       ? parseInt(priceEl.dataset.minorUnit)
+                       : Math.round(usdPrice * 100);
         }
-      } catch (error) {
-        console.error('Error checking payment status:', error);
+        console.log('About to send to server:', {
+          plan: selectedPlan.id,
+          amount: selectedPlan.amount,
+          name: selectedPlan.name,
+          currency,
+          stripeAmount,
+          userId
+        });
+
+        // 3) POST to server
+        const resp = await fetch('/create-stripe-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-ID': userId
+          },
+          body: JSON.stringify({
+            plan: selectedPlan.id,
+            amount: selectedPlan.amount,
+            name: selectedPlan.name,
+            currency,
+            stripeAmount
+          })
+        });
+        if (!resp.ok) {
+          // Log status and body for debugging
+          const text = await resp.text();
+          console.error('Stripe session creation failed. Status:', resp.status, text);
+          throw new Error(`Failed to create payment session (Status ${resp.status})`);
+        }
+        const { id: sessionId } = await resp.json();
+        console.log('Stripe session ID:', sessionId);
+
+        // 4) Redirect
+        const { error } = await stripe.redirectToCheckout({ sessionId });
+        if (error) throw error;
+      } catch (err) {
+        console.error('Error in Stripe handler:', err);
+        alert(err.message || 'Error processing payment.');
+        this.disabled = false;
+        this.textContent = 'Pay with Card';
       }
-    }
-
-     async function refreshCreditBalance() {
-    const userId = localStorage.getItem('userId');
-    if (!userId) return;
-    try {
-      const res = await fetch(`/api/user-credits/${userId}`);
-      const { credits } = await res.json();
-      localStorage.setItem('userCredits', credits);
-      document.getElementById('currentBalance').textContent = credits;
-      document.getElementById('creditCount').textContent  = credits;
-    } catch (err) {
-      console.error('Failed to fetch credits:', err);
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    // 1) refresh from server
-    refreshCreditBalance();
-
-    // 2) existing logic
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    if (!isLoggedIn) {
-      window.location.href = 'index.html';
-    }
+    });
   });
+</script>
 
-    // Update credit balance display
-    function updateCreditBalance(creditsToAdd = 0) {
-      let currentCredits = parseInt(localStorage.getItem('userCredits') || '0');
-      currentCredits += creditsToAdd;
-      localStorage.setItem('userCredits', currentCredits.toString());
-      
-      // Update display
-      document.getElementById('currentBalance').textContent = currentCredits;
-      document.getElementById('creditCount').textContent = currentCredits;
-    }
 
-    // Initialize page
-    document.addEventListener('DOMContentLoaded', function() {
-      // Set current credit balance
-      updateCreditBalance();
-      
-      // Check if user is logged in
-      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      if (!isLoggedIn) {
-        window.location.href = 'index.html';
-      }
-    });
 
-    // FAQ toggles
-    document.querySelectorAll('.faq-question').forEach(button => {
-      button.addEventListener('click', function() {
-        this.parentElement.classList.toggle('active');
-      });
-    });
-  </script>
+
+
+
 </body>
 </html>

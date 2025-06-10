@@ -94,8 +94,9 @@ export async function analyzeWithAI(preprocessedText) {
 - Make sure not to state the obvious, but to reach deeper into the chat, searching for patterns and meanings, that are not immediately visible.
 - Respond in a casual/friendly tone, and dig deeper into the chat, making sure to analyze the chat completely.
 - Dont include any slashes or any other symbols in the analysis.
+- Be Confident and Honest.
 
-Return your analysis STRICTLY in the following JSON format (if the person's name is way too long, just slightly abbreviate it):
+Return your analysis STRICTLY in the following JSON format and be honest, (if the person's name is way too long, just slightly abbreviate it):
 
 {
   "overallConnection": { "label": "", "explanation": "" },

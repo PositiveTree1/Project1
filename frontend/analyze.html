@@ -39,22 +39,43 @@
 });
     </script>
 
-    <script>
-  function initGoogleSignIn() {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
+     <style>
+    /* hide our wrapper until both DOM + GSI client are ready */
+    #googleSignInWrapper { visibility: hidden; }
+    /* (optional) also keep GSI button hidden until it gets .visible) */
+    .g_id_signin { visibility: hidden; }
+    .g_id_signin.visible { visibility: visible; }
+  </style>
+
+  <script>
+    window.domReady = false;
+    window.gsiLoaded = false;
+
+    function tryInitGoogleButton() {
+      if (window.domReady && window.gsiLoaded) {
+        const wrapper = document.getElementById('googleSignInWrapper');
+        if (wrapper) wrapper.style.visibility = 'visible';
         window.setupGoogleButton();
-        document.querySelector('.g_id_signin')?.classList.add('visible');
-      });
-    } else {
-      window.setupGoogleButton();
-      document.querySelector('.g_id_signin')?.classList.add('visible');
+      }
     }
-  }
-</script>
-      
-    <!-- 2) Load GSI client -->
-    <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
+
+    document.addEventListener('DOMContentLoaded', () => {
+      window.domReady = true;
+      tryInitGoogleButton();
+    });
+
+    function initGoogleSignIn() {
+      window.gsiLoaded = true;
+      tryInitGoogleButton();
+    }
+  </script>
+
+  <!-- 2) GSI client → initGoogleSignIn() -->
+  <script
+    src="https://accounts.google.com/gsi/client"
+    async defer
+    onload="initGoogleSignIn()"
+  ></script>
   
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -65,17 +86,6 @@
   
     <script type="module" src="/scripts/authCheck.js"></script>
     
-    <style>
-  /* Temporary fix for Google button flash */
-  .g_id_signin {
-    visibility: hidden;
-  }
-  .g_id_signin.visible {
-    visibility: visible;
-  }
-</style>
-
-
   </head>
   
   
@@ -177,36 +187,71 @@
         
         <!-- Guide Content -->
         <div class="guide-content">
-          <div class="guide-step">
-            <div class="step-number">1</div>
-            <div class="step-content">
-              <h3>Open the WhatsApp chat you want to analyze</h3>
-              <p>Go to the individual or group chat in WhatsApp</p>
+          <div class="os-toggle-container">
+            <button class="os-toggle active" data-os="ios">iOS</button>
+            <button class="os-toggle" data-os="android">Android</button>
+          </div>
+          
+          <div class="guide-steps ios-steps">
+            <div class="guide-step">
+              <div class="step-number">1</div>
+              <div class="step-content">
+                <h3>Open the WhatsApp chat you want to analyze</h3>
+                <p>Go to the individual or group chat in WhatsApp</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-number">2</div>
+              <div class="step-content">
+                <h3>Export the chat</h3>
+                <p>Tap the chat name at the top > Scroll down > Export Chat</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-number">3</div>
+              <div class="step-content">
+                <h3>Choose to export without media</h3>
+                <p>Select "Without Media" and save to your files</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-number">4</div>
+              <div class="step-content">
+                <h3>Upload the file here</h3>
+                <p>Use the button above to select your exported file</p>
+              </div>
             </div>
           </div>
-          <div class="guide-step">
-            <div class="step-number">2</div>
-            <div class="step-content">
-              <h3>Export the chat</h3>
-              <p>Tap ⋮ (Android) or the chat name (iOS) > More (Android) or scroll down (iOS) > Export chat</p>
+          
+          <div class="guide-steps android-steps" style="display:none">
+            <div class="guide-step">
+              <div class="step-number">1</div>
+              <div class="step-content">
+                <h3>Open the WhatsApp chat you want to analyze</h3>
+                <p>Go to the individual or group chat in WhatsApp</p>
+              </div>
             </div>
-          </div>
-          <div class="guide-step">
-            <div class="step-number">3</div>
-            <div class="step-content">
-              <h3>Choose to export without media</h3>
-              <p>Select "Without Media", and save to files</p>
+            <div class="guide-step">
+              <div class="step-number">2</div>
+              <div class="step-content">
+                <h3>Export the chat</h3>
+                <p>Tap ⋮ (three dots menu) > More > Export chat</p>
+              </div>
             </div>
-          </div>
-          <div class="guide-step">
-            <div class="step-number">4</div>
-            <div class="step-content">
-              <h3>Upload the file here</h3>
-              <p>Use the button above to select your exported file</p>
+            <div class="guide-step">
+              <div class="step-number">3</div>
+              <div class="step-content">
+                <h3>Choose to export without media</h3>
+                <p>Select "Without Media" and save to your files</p>
+              </div>
             </div>
-          </div>
-          <div class="guide-note">
-            <p>🔒 Your chat data is processed locally and securely using trusted services.</p>
+            <div class="guide-step">
+              <div class="step-number">4</div>
+              <div class="step-content">
+                <h3>Upload the file here</h3>
+                <p>Use the button above to select your exported file</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -275,19 +320,7 @@
         document.write('<script src="scripts/dashboard.js"><\/script>');
     }
 </script>
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const nav = document.querySelector('.navbar');
-    // on scroll, if we've moved down at all -> add .scrolling
-    window.addEventListener('scroll', () => {
-      if (window.scrollY > 0) {
-        nav.classList.add('scrolling');
-      } else {
-        nav.classList.remove('scrolling');
-      }
-    });
-  });
-</script>
+
 <!-- Consent Popup -->
 <div id="consentPopup" class="consent-popup hidden">
   <div class="consent-content">
@@ -304,5 +337,30 @@
     </div>
   </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  let lastScroll = 0;
+  const navbar = document.querySelector('.navbar');
+  
+  window.addEventListener('scroll', function() {
+    const currentScroll = window.pageYOffset;
+    
+    if (currentScroll <= 0) {
+      navbar.classList.remove('hidden');
+      return;
+    }
+    
+    if (currentScroll > lastScroll && !navbar.classList.contains('hidden')) {
+      // Scroll down
+      navbar.classList.add('hidden');
+    } else if (currentScroll < lastScroll && navbar.classList.contains('hidden')) {
+      // Scroll up
+      navbar.classList.remove('hidden');
+    }
+    
+    lastScroll = currentScroll;
+  });
+});
+</script>
 </body>
 </html>

@@ -66,7 +66,7 @@
 }
 
 
-  .navbar {
+.navbar {
   position: fixed;
   top: 0;
   width: 100%;
@@ -85,12 +85,9 @@
 }
 
 #googleSignInWrapper {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    height: 100%;
-    margin-left: auto;
+  visibility: hidden;
 }
+
 
 /* Desktop styles (default) */
 .g-signin2 {
@@ -142,9 +139,12 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    height: 100%;
-    margin-left: auto;
+    margin-left: 0;              /* <— removed ‘auto’ */
+    visibility: hidden;          /* keep this so it only shows when ready */
+    min-width: fit-content;      /* collapse to the size of the Google button/avatar */
+    height: 40px;
 }
+
 
 /* Mobile-specific adjustments */
 @media (max-width: 768px) {
@@ -162,13 +162,29 @@
 
   
   
-  .navbar.scrolling {
-    position: absolute;
-  }
+/* For index page */
+.index-page .navbar {
+  position: fixed !important;
+  top: 0 !important;
+}
+
+/* For analysis page */
+.analysis-page .navbar {
+  position: absolute; /* Change from fixed to absolute */
+  top: 0;
+}
+
+.analysis-page .top-section {
+  margin-top: 70px; /* Push content down by navbar height */
+}
+
+.analysis-page .navbar.hidden {
+  transform: translateY(-100%);
+}
   
   .analysis-header .container {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     width: 90%;
     max-width: 1200px;
@@ -237,9 +253,12 @@
     gap: 12px;
     margin-left: auto;
     padding-right: 0;
-        will-change: transform;
 
     justify-content: flex-end;
+    min-height: 40px;
+    position: relative;
+    contain: layout style; /* Improves performance */
+    will-change: transform;
 }
 
 @media (max-width: 768px) {
@@ -255,13 +274,18 @@
     gap: 8px !important;
   }
 
-  #creditCount {
-    position: relative;
-    top: 0;
-    font-variant-numeric: tabular-nums; /* Prevent number width changes */
-    width: 20px; /* Fixed width for numbers */
-    text-align: center;
-  }
+#creditCount {
+  display: inline-block;       /* shrink-to-fit its contents */
+  min-width: 20px;             /* keeps 1-digit numbers centered */
+  width: auto;                 /* allows 2-, 3-digit numbers to expand */
+  padding: 0 4px;              /* optional: some breathing room */
+  text-align: center;
+  font-variant-numeric: tabular-nums; /* keep digits monospaced */
+}
+
+.credits-display {
+  white-space: nowrap;
+}
   
   /* Credits display */
   .credits-display {
@@ -291,6 +315,7 @@
   display: flex;
   align-items: center;
   text-decoration: none;
+  
 }
 
 .hidden { display: none; }

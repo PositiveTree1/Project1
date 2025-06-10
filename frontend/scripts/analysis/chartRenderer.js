@@ -643,7 +643,7 @@ function renderPersonBoxes(stats, uniqueWords, topEmojis, longestMessage, colors
         // Add total swear words (with subtle styling)
         if (window.totalSwearWordsPerSender) {
             const swearWordsTotal = document.createElement("p");
-            swearWordsTotal.textContent = `Total Curse Words: ${window.totalSwearWordsPerSender[sender] || 0}`;
+            swearWordsTotal.textContent = `Swear Words: ${window.totalSwearWordsPerSender[sender] || 0}`;
             swearWordsTotal.style.marginTop = "10px"; // Add some spacing
             swearWordsTotal.style.color = "#70328f"; // Lighter color for subtle distinction
             swearWordsTotal.style.fontSize = "16px"; // Slightly smaller font size
@@ -1414,7 +1414,7 @@ function renderEngagementChart(engagementData, senders) {
     // Add the title (styled as a subtitle)
     const title = document.createElement("h2");
     title.className = "title subtitle";
-    title.textContent = "Engagement Ratio during convos";
+    title.textContent = "Who talks the most during conversations?";
     engagementContainer.appendChild(title);
 
     // Create the chart container

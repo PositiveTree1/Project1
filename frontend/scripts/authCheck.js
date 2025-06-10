@@ -18,25 +18,28 @@ export function parseJwt(token) {
 }
 
 // Update the updateCreditDisplay function
+// Update the updateCreditDisplay function
 export async function updateCreditDisplay() {
     const creditCountElement = document.getElementById('creditCount');
-    if (creditCountElement) {
+    const currentBalanceElement = document.getElementById('currentBalance');
+    
+    if (creditCountElement || currentBalanceElement) {
         const userId = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).sub : null;
+        let credits = localStorage.getItem('userCredits') || '0';
+        
         if (userId) {
             try {
                 const res = await fetch(`/api/user-credits/${userId}`);
-                const { credits } = await res.json();
+                const { credits: serverCredits } = await res.json();
+                credits = serverCredits;
                 localStorage.setItem('userCredits', credits);
-                creditCountElement.textContent = credits;
             } catch (err) {
                 console.error('Failed to fetch credits:', err);
-                const credits = localStorage.getItem('userCredits') || '0';
-                creditCountElement.textContent = credits;
             }
-        } else {
-            const credits = localStorage.getItem('userCredits') || '0';
-            creditCountElement.textContent = credits;
         }
+        
+        if (creditCountElement) creditCountElement.textContent = credits;
+        if (currentBalanceElement) currentBalanceElement.textContent = credits;
     }
 }
 

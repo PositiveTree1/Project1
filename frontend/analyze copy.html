@@ -160,37 +160,73 @@
         
         
         <!-- Guide Content -->
+        <!-- Replace the existing guide-content div with this: -->
         <div class="guide-content">
-          <div class="guide-step">
-            <div class="step-number">1</div>
-            <div class="step-content">
-              <h3>Open the WhatsApp chat you want to analyze</h3>
-              <p>Go to the individual or group chat in WhatsApp</p>
+          <div class="os-toggle-container">
+            <button class="os-toggle active" data-os="ios">iOS</button>
+            <button class="os-toggle" data-os="android">Android</button>
+          </div>
+          
+          <div class="guide-steps ios-steps">
+            <div class="guide-step">
+              <div class="step-number">1</div>
+              <div class="step-content">
+                <h3>Open the WhatsApp chat you want to analyze</h3>
+                <p>Go to the individual or group chat in WhatsApp</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-number">2</div>
+              <div class="step-content">
+                <h3>Export the chat</h3>
+                <p>Tap the chat name at the top > Scroll down > Export Chat</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-number">3</div>
+              <div class="step-content">
+                <h3>Choose to export without media</h3>
+                <p>Select "Without Media" and save to your files</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-number">4</div>
+              <div class="step-content">
+                <h3>Upload the file here</h3>
+                <p>Use the button above to select your exported file</p>
+              </div>
             </div>
           </div>
-          <div class="guide-step">
-            <div class="step-number">2</div>
-            <div class="step-content">
-              <h3>Export the chat</h3>
-              <p>Tap ⋮ (Android) or the chat name (iOS) > More > Export chat</p>
+          
+          <div class="guide-steps android-steps" style="display:none">
+            <div class="guide-step">
+              <div class="step-number">1</div>
+              <div class="step-content">
+                <h3>Open the WhatsApp chat you want to analyze</h3>
+                <p>Go to the individual or group chat in WhatsApp</p>
+              </div>
             </div>
-          </div>
-          <div class="guide-step">
-            <div class="step-number">3</div>
-            <div class="step-content">
-              <h3>Choose to export without media</h3>
-              <p>Select "Without Media" to get a smaller file</p>
+            <div class="guide-step">
+              <div class="step-number">2</div>
+              <div class="step-content">
+                <h3>Export the chat</h3>
+                <p>Tap ⋮ (three dots menu) > More > Export chat</p>
+              </div>
             </div>
-          </div>
-          <div class="guide-step">
-            <div class="step-number">4</div>
-            <div class="step-content">
-              <h3>Upload the file here</h3>
-              <p>Use the button above to select your exported .txt file</p>
+            <div class="guide-step">
+              <div class="step-number">3</div>
+              <div class="step-content">
+                <h3>Choose to export without media</h3>
+                <p>Select "Without Media" and save to your files</p>
+              </div>
             </div>
-          </div>
-          <div class="guide-note">
-            <p>🔒 Your chat data never leaves your device and isn't stored permanently</p>
+            <div class="guide-step">
+              <div class="step-number">4</div>
+              <div class="step-content">
+                <h3>Upload the file here</h3>
+                <p>Use the button above to select your exported file</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@
         "global": "^4.4.0",
         "google-auth-library": "^9.15.1",
         "ngrok": "^5.0.0-beta.2",
+        "node-fetch": "^3.3.2",
         "nodemailer": "^7.0.3",
         "stripe": "^18.1.1",
         "vader-sentiment": "^1.1.3"

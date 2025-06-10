@@ -5,6 +5,7 @@ const cors    = require('cors');
 const path    = require('path');
 
 
+
 // Add webhook endpoint to handle payment completion
 app.post('/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
   console.log('🔔 stripe-webhook hit!', {
@@ -43,6 +44,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin  = require('firebase-admin');
 
+
+
 function requireAuth(req, res, next) {
   const userId = req.body?.userId || req.params?.userId;
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -50,49 +53,182 @@ function requireAuth(req, res, next) {
 }
 
 
-// Add this endpoint to handle Stripe checkout session creation
-app.post('/create-stripe-session',express.json(), async (req, res) => {
-  console.log('🔥 Incoming request to /create-stripe-session');
-  console.log('🧠 Body:', req.body);
-  console.log('📦 userId:', req.headers['x-user-id']);
+// … somewhere at the top of server.js:
+// (No need to import anything else; Node 18+ has global fetch.)
+
+async function convertUSDtoCurrency(usdAmount, targetCurrency) {
+  // If the caller asked for USD, just return it immediately:
+  if (targetCurrency === 'USD') {
+    return {
+      currency: 'USD',
+      minorUnit: Math.round(usdAmount * 100),
+    };
+  }
+
+  const API_URL = 'https://api.exchangerate.host/latest?base=USD';
+  let json;
 
   try {
-    const { plan, amount, price, name } = req.body;
-    const userId = req.headers['x-user-id']; // You'll need to send this from frontend
+    const resp = await fetch(API_URL);
 
+    // 1) If the HTTP status is not 200, log the status + body, then fallback:
+    if (!resp.ok) {
+      const bodyText = await resp.text();
+      console.error(
+        `❌ Exchange‐rate API returned HTTP ${resp.status}. Body:`,
+        bodyText
+      );
+      // Fallback to charging in USD
+      return {
+        currency: 'USD',
+        minorUnit: Math.round(usdAmount * 100),
+      };
+    }
+
+    // 2) Parse JSON; if parsing fails, catch below
+    json = await resp.json();
+  } catch (fetchErr) {
+    console.error(
+      '❌ convertUSDtoCurrency: failed to fetch/parsing exchange rates:',
+      fetchErr
+    );
+    // In case of ANY fetch/JSON error, fallback to USD:
+    return {
+      currency: 'USD',
+      minorUnit: Math.round(usdAmount * 100),
+    };
+  }
+
+  // 3) At this point, resp.ok was true and `json` was parsable, but json.rates might be missing
+  if (!json || typeof json.rates !== 'object') {
+    console.warn(
+      `⚠️ convertUSDtoCurrency: "rates" is not an object. Full response:`,
+      json
+    );
+    return {
+      currency: 'USD',
+      minorUnit: Math.round(usdAmount * 100),
+    };
+  }
+
+  const rate = json.rates[targetCurrency];
+  if (typeof rate !== 'number') {
+    console.warn(
+      `⚠️ convertUSDtoCurrency: no numeric rate for "${targetCurrency}". Rates received:`,
+      json.rates
+    );
+    return {
+      currency: 'USD',
+      minorUnit: Math.round(usdAmount * 100),
+    };
+  }
+
+  // 4) We have a valid rate. Compute raw amount.
+  const raw = usdAmount * rate;
+  const zeroDecimalSet = new Set(['JPY', 'KRW', 'VND']);
+  if (zeroDecimalSet.has(targetCurrency)) {
+    // Zero‐decimal currencies charge in whole units
+    return {
+      currency: targetCurrency,
+      minorUnit: Math.round(raw),
+    };
+  } else {
+    return {
+      currency: targetCurrency,
+      minorUnit: Math.round(raw * 100),
+    };
+  }
+}
+
+
+// ─────────── 7️⃣ CREATE‐CHECKOUT ENDPOINT ───────────
+const PLAN_PRICES_USD = {
+  basic:   3.99,
+  power:   6.49,
+  premium: 9.99
+};
+
+app.post('/create-stripe-session', async (req, res) => {
+  // Log exactly what the client sent
+  console.log('→ [create-stripe-session] req.body:', JSON.stringify(req.body));
+  console.log('→ [create-stripe-session] x-user-id header:', req.headers['x-user-id']);
+
+  try {
+    const { plan, name, currency: clientCurrency } = req.body;
+    const userId = req.headers['x-user-id'];
+
+    // 4a. Validate userId
     if (!userId) {
+      console.error('❌ Missing userId in headers');
       return res.status(400).json({ error: 'User not authenticated' });
     }
 
-    // Create a Stripe Checkout Session
+    // 4b. Validate plan
+    if (!plan || !PLAN_PRICES_USD[plan]) {
+      console.error('❌ Unknown or missing plan:', plan);
+      return res.status(400).json({ error: 'Unknown plan.' });
+    }
+    const usdPrice = PLAN_PRICES_USD[plan];
+
+    // 4c. Determine the target currency
+    const targetCurrency = (clientCurrency || 'USD').toUpperCase();
+    const allowed = ['USD','EUR','GBP','JPY','CAD','BRL'];
+    if (!allowed.includes(targetCurrency)) {
+      console.error(`❌ Unsupported currency: "${targetCurrency}"`);
+      return res.status(400).json({ error: 'Unsupported currency' });
+    }
+
+    // 4d. Perform server-side conversion (and catch any fetch errors)
+    let finalCurrency, minorUnit;
+    try {
+      ({ currency: finalCurrency, minorUnit } = await convertUSDtoCurrency(usdPrice, targetCurrency));
+      console.log(`→ Converted \$${usdPrice} USD → ${minorUnit} in minor units of ${finalCurrency}`);
+    } catch (convErr) {
+      console.error('❌ convertUSDtoCurrency threw an unexpected error:', convErr);
+      // As a fallback, charge in USD
+      finalCurrency = 'USD';
+      minorUnit = Math.round(usdPrice * 100);
+    }
+
+    // 4e. Build the success/cancel URLs and log them
+    const successUrl  = `${process.env.FRONTEND_URL}/credits.html?success=true&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl   = `${process.env.FRONTEND_URL}/credits.html?canceled=true`;
+    console.log(`→ success_url: ${successUrl}`);
+    console.log(`→ cancel_url:  ${cancelUrl}`);
+
+    // 4f. Finally, attempt to create the Stripe Checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
-          currency: 'usd',
+          currency: finalCurrency.toLowerCase(),
           product_data: {
-            name: `${name} Plan - ${amount} Credits`,
+            name: `${name} Plan – ${plan.charAt(0).toUpperCase() + plan.slice(1)}`,
           },
-          unit_amount: Math.round(price * 100), // Stripe uses cents
+          unit_amount: minorUnit,
         },
-        quantity: 1,
+        quantity: 1
       }],
       mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL}/credits.html?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/credits.html?canceled=true`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         userId,
-        creditAmount: amount,
-        planId: plan
+        creditAmount: plan === 'basic' ? 40 : plan === 'power' ? 95 : 170,
+        planId: plan,
+        currency: finalCurrency
       }
     });
 
-    res.json({ id: session.id });
+    console.log('→ Created Stripe session successfully:', session.id);
+    return res.json({ id: session.id });
   } catch (err) {
-    console.error('Stripe session creation error:', err);
-    res.status(500).json({ error: 'Failed to create payment session' });
+    // 4g. Catch ANY unexpected error, log its entire stack, then return 500
+    console.error('❌ [create-stripe-session] Uncaught error:', err);
+    return res.status(500).json({ error: 'Failed to create payment session' });
   }
 });
+
 
 
 
@@ -376,9 +512,9 @@ app.post('/api/analyze', async (req, res) => {
 
 
 
-
 const { OAuth2Client } = require('google-auth-library');
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 
 app.post('/api/verify-google-token', async (req, res) => {
   try {
@@ -396,15 +532,18 @@ app.post('/api/verify-google-token', async (req, res) => {
     const userDoc = await userRef.get();
     const isNewUser = !userDoc.exists;
 
-    // Save or update user data
+    // Save or update user data with ALL fields
     await userRef.set({
       name,
-      email,
+      email, // <-- This was missing in your current implementation
       picture,
       lastLogin: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: isNewUser 
+        ? admin.firestore.FieldValue.serverTimestamp() 
+        : userDoc.data().createdAt || admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      credits: isNewUser ? 0 : userDoc.data().credits || 0 // Initialize credits if new user
     }, { merge: true });
-
-    
 
     res.json({
       success: true,

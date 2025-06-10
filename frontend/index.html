@@ -1,36 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" type="image/png" href="assets/chatPhantom.png">
     <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  
-  <title>ChatPhantom | Understand Your Chats</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="ChatPhantom - Analyze and understand your chat conversations with powerful AI insights. Improve your relationships through data-driven analysis.">
+    <meta name="keywords" content="chat analysis, chatphantom, WhatsApp analytics, conversation, ai chat analysis ,chat phantom">
+    <meta name="author" content="ChatPhantom">
+    <meta property="og:title" content="ChatPhantom | Understand Your Chats">
+    <meta property="og:description" content="Analyze, understand, and improve your relationships with our powerful analytics platform.">
+    <meta property="og:image" content="https://chatphantom.org/assets/chatPhantom.png">
+    <meta property="og:url" content="https://chatphantom.org">
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" href="assets/chatPhantom.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="assets/chatPhantom.png" sizes="192x192">
+    <link rel="apple-touch-icon" href="assets/chatPhantom.png">
+    
+    <title>ChatPhantom | Understand Your Chats</title>
     <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     <link rel="stylesheet" href="styles/navbar.css">
 
-    <script>
-  function initGoogleSignIn() {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        window.setupGoogleButton();
-        document.querySelector('.g_id_signin')?.classList.add('visible');
-      });
-    } else {
-      window.setupGoogleButton();
-      document.querySelector('.g_id_signin')?.classList.add('visible');
-    }
-  }
-</script>
+     <style>
+    /* hide our wrapper until both DOM + GSI client are ready */
+    #googleSignInWrapper { visibility: hidden; }
+    /* (optional) also keep GSI button hidden until it gets .visible) */
+    .g_id_signin { visibility: hidden; }
+    .g_id_signin.visible { visibility: visible; }
+  </style>
 
-    <!-- 2) GSI client calls our initGoogleSignIn when it's ready -->
-    <script
+  <script>
+    window.domReady = false;
+    window.gsiLoaded = false;
+
+    function tryInitGoogleButton() {
+      if (window.domReady && window.gsiLoaded) {
+        const wrapper = document.getElementById('googleSignInWrapper');
+        if (wrapper) wrapper.style.visibility = 'visible';
+        window.setupGoogleButton();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      window.domReady = true;
+      tryInitGoogleButton();
+    });
+
+    function initGoogleSignIn() {
+      window.gsiLoaded = true;
+      tryInitGoogleButton();
+    }
+  </script>
+
+  <!-- 2) GSI client → initGoogleSignIn() -->
+  <script
     src="https://accounts.google.com/gsi/client"
     async defer
     onload="initGoogleSignIn()"
-    ></script>
+  ></script>
 
-    <!-- 3) authCheck.js defines setupGoogleButton and attaches it to window -->
-    <script type="module" src="/scripts/authCheck.js"></script>
+  <!-- 3) define setupGoogleButton() -->
+  <script type="module" src="/scripts/authCheck.js"></script>
 
     <!-- 4) Other scripts -->
     <script type="module" src="/scripts/api.js" defer></script>
@@ -106,15 +135,7 @@
         }
     </style>
 
-    <style>
-  /* Temporary fix for Google button flash */
-  .g_id_signin {
-    visibility: hidden;
-  }
-  .g_id_signin.visible {
-    visibility: visible;
-  }
-</style>
+    
 </head>
 
 <body class="index-page bg-white min-h-screen">
@@ -583,7 +604,7 @@
             </div>
             
             <div class="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
-                <p class="text-gray-400 text-sm mb-4 md:mb-0">&copy; 2025 ChatAnalyzer. All rights reserved.</p>
+                <p class="text-gray-400 text-sm mb-4 md:mb-0">&copy; 2025 chatphantom All rights reserved.</p>
                 
                 <div class="flex items-center space-x-4">
                     <div class="flex items-center">
@@ -638,6 +659,93 @@
   });
 });
 </script>
+<script>
+  // Detect Instagram in-app browser
+  function isInstagramBrowser() {
+    const userAgent = window.navigator.userAgent || window.navigator.vendor || window.opera;
+    return userAgent.includes("Instagram");
+  }
 
+  // Show redirect message if in Instagram browser
+  if (isInstagramBrowser()) {
+    const instagramWarning = document.createElement('div');
+    instagramWarning.style.position = 'fixed';
+    instagramWarning.style.bottom = '20px';
+    instagramWarning.style.left = '20px';
+    instagramWarning.style.right = '20px';
+    instagramWarning.style.maxWidth = '500px';
+    instagramWarning.style.margin = '0 auto';
+    instagramWarning.style.backgroundColor = 'white';
+    instagramWarning.style.zIndex = '9999';
+    instagramWarning.style.padding = '20px';
+    instagramWarning.style.borderRadius = '12px';
+    instagramWarning.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+    instagramWarning.style.border = '2px solid #6a3093';
+    instagramWarning.style.textAlign = 'center';
+    
+    instagramWarning.innerHTML = `
+      <div style="position: absolute; top: 10px; right: 10px;">
+        <button id="closeWarningBtn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #888;">&times;</button>
+      </div>
+      <h3 style="font-size: 18px; margin-bottom: 10px; color: #6a3093;">For Best Experience</h3>
+      <p style="font-size: 14px; margin-bottom: 15px; color: #333; line-height: 1.4;">
+        Google Sign-In works best in Chrome, Safari, or other browsers. 
+        Some features may not work properly in Instagram's browser.
+      </p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button id="copyLinkBtn" style="padding: 8px 16px; background: #f3e5ff; border: none; border-radius: 8px; color: #6a3093; font-weight: bold; cursor: pointer; font-size: 14px;">
+          Copy Link
+        </button>
+        <button id="openInBrowserBtn" style="padding: 8px 16px; background: #6a3093; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; font-size: 14px;">
+          Open in Browser
+        </button>
+      </div>
+    `;
+    
+    document.body.appendChild(instagramWarning);
+    
+    // Copy link button - now copies just the domain
+    document.getElementById('copyLinkBtn').addEventListener('click', () => {
+      navigator.clipboard.writeText("https://chatphantom.org").then(() => {
+        const originalText = document.getElementById('copyLinkBtn').textContent;
+        document.getElementById('copyLinkBtn').textContent = 'Copied!';
+        setTimeout(() => {
+          document.getElementById('copyLinkBtn').textContent = originalText;
+        }, 2000);
+      }).catch(err => {
+        console.error('Failed to copy link: ', err);
+      });
+    });
+    
+    // Open in browser button - opens the domain
+    document.getElementById('openInBrowserBtn').addEventListener('click', () => {
+      // Create a hidden anchor tag to trigger the browser open
+      const a = document.createElement('a');
+      a.href = "https://chatphantom.org";
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+    
+    // Close warning button
+    document.getElementById('closeWarningBtn').addEventListener('click', () => {
+      instagramWarning.style.display = 'none';
+    });
+    
+    // Auto-hide after 30 seconds
+    setTimeout(() => {
+      if (instagramWarning.parentNode) {
+        instagramWarning.style.opacity = '0';
+        setTimeout(() => {
+          if (instagramWarning.parentNode) {
+            instagramWarning.style.display = 'none';
+          }
+        }, 500);
+      }
+    }, 30000);
+  }
+</script>
 </body>
 </html>
