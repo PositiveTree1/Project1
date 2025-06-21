@@ -51,68 +51,150 @@ function isIncreasing(timestamps) {
 function detectDateFormat(text, chatFormat) {
     const lines = text.split('\n');
     let regex;
+    
+    // Define regex based on chat format
     if (chatFormat === 'bracket') {
-        regex = /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?/;
+        regex = /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\]/;
     } else if (chatFormat === 'android') {
-        regex = /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?/;
+        regex = /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? -/;
     } else {
         throw new Error('Unknown chat format');
     }
 
-    // First, try the number-based detection
-    for (const line of lines) {
+    // Counters for format detection
+    let usFormatCount = 0;
+    let euFormatCount = 0;
+    let unambiguousUS = 0;
+    let unambiguousEU = 0;
+
+    // First pass: quick detection based on unambiguous cases
+    for (const line of lines.slice(0, 50)) { // Check first 50 lines for performance
         const match = line.match(regex);
         if (match) {
-            const num1 = parseInt(match[1], 10);
-            const num2 = parseInt(match[2], 10);
-            if (num1 > 12) return 'EU'; // Day > 12, must be DD/MM/YYYY
-            if (num2 > 12) return 'US'; // Month > 12, must be MM/DD/YYYY
+            const [_, num1, num2, year, hourStr, minute, second, period] = match;
+            const hour = parseInt(hourStr, 10);
+            
+            // Check for unambiguous cases based on numbers
+            if (num1 > 12) {
+                // First number >12 must be day (EU format)
+                unambiguousEU++;
+                continue;
+            }
+            if (num2 > 12) {
+                // Second number >12 must be month (US format)
+                unambiguousUS++;
+                continue;
+            }
+
+            // Handle AM/PM cases
+            if (period) {
+                if (hour > 12) {
+                    // Invalid time (hour can't be >12 with AM/PM)
+                    return 'EU'; // Assume EU format if invalid US format
+                }
+                if (hour <= 12) {
+                    // Could be either format, we'll check validity
+                    const monthUS = num1.padStart(2, '0');
+                    const dayUS = num2.padStart(2, '0');
+                    const dateUS = new Date(`${year}-${monthUS}-${dayUS}T${convert12to24(hourStr, period)}:${minute}:${second || '00'}`);
+                    
+                    const dayEU = num1.padStart(2, '0');
+                    const monthEU = num2.padStart(2, '0');
+                    const dateEU = new Date(`${year}-${monthEU}-${dayEU}T${convert12to24(hourStr, period)}:${minute}:${second || '00'}`);
+                    
+                    if (!isNaN(dateUS.getTime())) usFormatCount++;
+                    if (!isNaN(dateEU.getTime())) euFormatCount++;
+                }
+            }
         }
     }
 
-    // If ambiguous, test both formats with a sample
-    const sampleLines = lines.slice(0, 10);
-    const timestampsUS = [];
-    const timestampsEU = [];
-    for (const line of sampleLines) {
-        const match = line.match(regex);
-        if (match) {
-            const num1 = match[1];
-            const num2 = match[2];
-            const year = match[3];
-            const hour = match[4];
-            const minute = match[5];
-            const second = match[6] || '00';
+    // If we found unambiguous cases, use them
+    if (unambiguousUS > 0 && unambiguousEU === 0) return 'US';
+    if (unambiguousEU > 0 && unambiguousUS === 0) return 'EU';
 
-            // US format: MM/DD/YYYY
-            const monthUS = num1.padStart(2, '0');
-            const dayUS = num2.padStart(2, '0');
-            const dateUS = new Date(`${year}-${monthUS}-${dayUS}T${hour}:${minute}:${second}`);
-            if (!isNaN(dateUS.getTime())) {
-                timestampsUS.push(dateUS.getTime());
-            }
+    // Second pass: check chronological order for ambiguous cases
+    if (usFormatCount > 0 || euFormatCount > 0) {
+        const sampleLines = lines.slice(0, 30); // Check more lines for better accuracy
+        const timestampsUS = [];
+        const timestampsEU = [];
 
-            // EU format: DD/MM/YYYY
-            const dayEU = num1.padStart(2, '0');
-            const monthEU = num2.padStart(2, '0');
-            const dateEU = new Date(`${year}-${monthEU}-${dayEU}T${hour}:${minute}:${second}`);
-            if (!isNaN(dateEU.getTime())) {
-                timestampsEU.push(dateEU.getTime());
+        for (const line of sampleLines) {
+            const match = line.match(regex);
+            if (match) {
+                const [_, num1, num2, year, hourStr, minute, second, period] = match;
+                const hour = convert12to24(hourStr, period || '');
+
+                // Test US format
+                const monthUS = num1.padStart(2, '0');
+                const dayUS = num2.padStart(2, '0');
+                const dateUS = new Date(`${year}-${monthUS}-${dayUS}T${hour}:${minute}:${second || '00'}`);
+                if (!isNaN(dateUS.getTime())) timestampsUS.push(dateUS.getTime());
+
+                // Test EU format
+                const dayEU = num1.padStart(2, '0');
+                const monthEU = num2.padStart(2, '0');
+                const dateEU = new Date(`${year}-${monthEU}-${dayEU}T${hour}:${minute}:${second || '00'}`);
+                if (!isNaN(dateEU.getTime())) timestampsEU.push(dateEU.getTime());
             }
         }
+
+        // Check which format produces chronologically ordered timestamps
+        const isUSIncreasing = isChronological(timestampsUS);
+        const isEUIncreasing = isChronological(timestampsEU);
+
+        if (isUSIncreasing && !isEUIncreasing) return 'US';
+        if (isEUIncreasing && !isUSIncreasing) return 'EU';
+        
+        // If both are chronological, use the one with more valid dates
+        if (timestampsUS.length > timestampsEU.length) return 'US';
+        if (timestampsEU.length > timestampsUS.length) return 'EU';
     }
 
-    const isUSIncreasing = timestampsUS.length > 1 && isIncreasing(timestampsUS);
-    const isEUIncreasing = timestampsEU.length > 1 && isIncreasing(timestampsEU);
+    // Final fallback to locale detection
+    return getLocaleDateFormat();
+}
 
-    if (isUSIncreasing && !isEUIncreasing) {
-        return 'US';
-    } else if (isEUIncreasing && !isUSIncreasing) {
-        return 'EU';
-    } else {
-        // Fallback to locale if both work or neither does
-        return getLocaleDateFormat();
+// Helper function to convert 12-hour time to 24-hour
+function convert12to24(hourStr, period) {
+    let hour = parseInt(hourStr, 10);
+    if (period === 'PM' && hour < 12) hour += 12;
+    if (period === 'AM' && hour === 12) hour = 0;
+    return hour.toString().padStart(2, '0');
+}
+
+// Improved chronological check with tolerance for minor out-of-order messages
+function isChronological(timestamps, maxOutOfOrder = 2) {
+    if (timestamps.length < 2) return true;
+    
+    let outOfOrderCount = 0;
+    for (let i = 1; i < timestamps.length; i++) {
+        if (timestamps[i] < timestamps[i - 1]) {
+            outOfOrderCount++;
+            if (outOfOrderCount > maxOutOfOrder) return false;
+        }
     }
+    return true;
+}
+
+function parseTime(hourStr, minuteStr, period) {
+    let hour = parseInt(hourStr, 10);
+    const minute = parseInt(minuteStr, 10);
+    
+    if (period) {
+        if (period === 'PM' && hour < 12) hour += 12;
+        if (period === 'AM' && hour === 12) hour = 0;
+    }
+    
+    return { hour, minute };
+}
+
+function isValidDate(year, month, day) {
+    month = parseInt(month, 10) - 1; // JS months are 0-11
+    const date = new Date(year, month, day);
+    return date.getFullYear() == year && 
+           date.getMonth() == month && 
+           date.getDate() == day;
 }
 
 export function initFileProcessor() {
@@ -127,71 +209,50 @@ export function initFileProcessor() {
 const isLowMemory = navigator.deviceMemory && navigator.deviceMemory < 1;
 
 export async function processSelectedFile() {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const aiToggle = document.getElementById('aiToggle');
-    
-    const fileInput = document.getElementById('fileInput');
-    const file = fileInput.files[0] || window.selectedFile;
-    if (!file) {
-        throw new Error('Please select a file first');
+    try {
+        // Get user and UI elements
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const aiToggle = document.getElementById('aiToggle');
+        const fileInput = document.getElementById('fileInput');
+        
+        // Get selected file
+        const file = fileInput.files[0] || window.selectedFile;
+        if (!file) {
+            throw new Error('Please select a file first');
+        }
+
+        // Read file content
+        const fileContent = await readFileContent(file);
+        
+        // Process file content based on type (zip or text)
+        const processedText = await processFileContent(file, fileContent);
+        
+        // Detect chat format and analyze
+        const chatFormat = detectChatFormat(processedText);
+        const dateFormat = detectDateFormat(processedText, chatFormat);
+        const { stats } = processChatLog(processedText);
+        
+        // Check if it's a group chat
+        const isGroupChat = Object.keys(stats).length > 2;
+        
+        // Process the file for full analysis
+        await processFullAnalysis(file, isGroupChat);
+        
+        return true;
+    } catch (error) {
+        console.error('Error processing file:', error);
+        showChatTooShortPopup();
+        return false;
     }
-    
-    // First read the file to check if it's a group chat
-    const text = await new Promise((resolve, reject) => {
+}
+
+// Helper function to read file content
+async function readFileContent(file) {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => resolve(event.target.result);
         reader.onerror = () => reject(new Error('Failed to read file'));
-        if (file.name.endsWith('.zip')) {
-            reader.readAsArrayBuffer(file);
-        } else {
-            reader.readAsText(file);
-        }
-    });
-    
-    // Process the file to get participant count
-    let processedText = text;
-    if (file.name.endsWith('.zip')) {
-        const zip = await JSZip.loadAsync(text);
-        const txtFile = Object.keys(zip.files).find((filename) => filename.endsWith('.txt'));
-        if (!txtFile) {
-            throw new Error('No .txt file found in the ZIP archive');
-        }
-        processedText = await zip.files[txtFile].async('text');
-    }
-    
-    const chatFormat = detectChatFormat(processedText);
-    const dateFormat = detectDateFormat(processedText, chatFormat);
-    const stats = processChatLog(processedText).stats;
-    const isGroupChat = Object.keys(stats).length > 2;
-    
-    // Now process the file normally regardless of credits
-    const reader = new FileReader();
-    return new Promise((resolve, reject) => {
-        reader.onload = async function(event) {
-            try {
-                let processingPromise;
-                if (file.name.endsWith('.zip')) {
-                    processingPromise = processZipFile(event.target.result);
-                } else {
-                    processingPromise = Promise.resolve(processChatLogFile(event.target.result));
-                }
-                processingPromise
-                    .then((result) => {
-                        if (result === false) {
-                            return resolve();
-                        }
-                        document.dispatchEvent(new Event('processingComplete'));
-                        resolve();
-                    })
-                    .catch((err) => {
-                        console.error('processSelectedFile unexpected error:', err);
-                        reject(err);
-                    });
-            } catch (error) {
-                reject(error);
-            }
-        };
-        reader.onerror = () => reject(new Error('Failed to read file'));
+        
         if (file.name.endsWith('.zip')) {
             reader.readAsArrayBuffer(file);
         } else {
@@ -200,6 +261,52 @@ export async function processSelectedFile() {
     });
 }
 
+// Helper function to process file content
+async function processFileContent(file, content) {
+    if (file.name.endsWith('.zip')) {
+        const zip = await JSZip.loadAsync(content);
+        const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
+        if (!txtFile) {
+            throw new Error('No .txt file found in the ZIP archive');
+        }
+        return await zip.files[txtFile].async('text');
+    }
+    return content;
+}
+
+// Helper function to perform full analysis
+async function processFullAnalysis(file, isGroupChat) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = async (event) => {
+            try {
+                const result = file.name.endsWith('.zip') 
+                    ? await processZipFile(event.target.result)
+                    : processChatLogFile(event.target.result);
+                
+                if (result === false) {
+                    resolve();
+                    return;
+                }
+                
+                document.dispatchEvent(new Event('processingComplete'));
+                resolve();
+            } catch (error) {
+                console.error('Analysis processing error:', error);
+                reject(error);
+            }
+        };
+        
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        
+        if (file.name.endsWith('.zip')) {
+            reader.readAsArrayBuffer(file);
+        } else {
+            reader.readAsText(file);
+        }
+    });
+}
 function showAnalysisArrivingPopup() {
     const popup = document.createElement("div");
     popup.className = "ai-popup";
@@ -572,170 +679,188 @@ window.processSelectedFile = processSelectedFile;
 
 function processChatLog(text) {
     try {
-    // Detect chat and date formats
-    const chatFormat = detectChatFormat(text);
-    const dateFormat = detectDateFormat(text, chatFormat);
-    window.chatFormat = chatFormat;
-    window.dateFormat = dateFormat;
+        // Detect chat and date formats
+        const chatFormat = detectChatFormat(text);
+        const dateFormat = detectDateFormat(text, chatFormat);
+        window.chatFormat = chatFormat;
+        window.dateFormat = dateFormat;
 
-    // Define regex based on chat format
-    let regex;
-    if (chatFormat === 'bracket') {
-        regex = /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/;
-    } else if (chatFormat === 'android') {
-        regex = /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
-    }
+        // Define regex based on chat format
+        let regex;
+        if (chatFormat === 'bracket') {
+            regex = /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\] ([^:]+):/;
+        } else if (chatFormat === 'android') {
+            regex = /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? - ([^:]+):/;
+        } else {
+            throw new Error('Unknown chat format');
+        }
 
-    const lines = text.split('\n');
-    const stats = {};
-    let startDate = null;
-    let endDate = null;
-    const messageCounts = {};
-    let conversations = [];
-    let currentConversation = [];
-    let previousTimestamp = null;
-    const conversationGap = 40 * 60 * 1000; // 40 minutes
-    const minMessages = 16;
+        const lines = text.split('\n');
+        const stats = {};
+        let startDate = null;
+        let endDate = null;
+        const messageCounts = {};
+        let conversations = [];
+        let currentConversation = [];
+        let previousTimestamp = null;
+        const conversationGap = 40 * 60 * 1000; // 40 minutes
+        const minMessages = 16;
 
-    const allDays = new Set();
-    const daysPerMonth = {};
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    monthNames.forEach(month => daysPerMonth[month] = new Set());
+        const allDays = new Set();
+        const daysPerMonth = {};
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        monthNames.forEach(month => { daysPerMonth[month] = new Set(); });
 
-    const hourlySenderStats = Array(24).fill(null).map(() => ({}));
-    const hourlySendersSet = new Set();
+        const hourlySenderStats = Array(24).fill(null).map(() => ({}));
+        const hourlySendersSet = new Set();
 
-    const perMonthCounts = {};
-    monthNames.forEach(month => perMonthCounts[month] = {});
+        const perMonthCounts = {};
+        monthNames.forEach(month => { perMonthCounts[month] = {}; });
 
-    const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const perWeekdayCounts = {};
-    weekdayNames.forEach(day => perWeekdayCounts[day] = {});
+        const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const perWeekdayCounts = {};
+        weekdayNames.forEach(day => { perWeekdayCounts[day] = {}; });
 
-    const mediaPlaceholders = [
-        "‎Voice call", "‎Missed voice call", "‎image omitted", "‎GIF omitted",
-        "‎sticker omitted", "‎video omitted", "‎audio omitted", "‎This message was deleted."
-    ];
+        const mediaPlaceholders = [
+            "‎Voice call", "‎Missed voice call", "‎image omitted", "‎GIF omitted",
+            "‎sticker omitted", "‎video omitted", "‎audio omitted", "‎This message was deleted."
+        ];
 
-    let validMessageCount = 0;
+        let validMessageCount = 0;
 
-    lines.forEach(line => {
-        if (mediaPlaceholders.some(placeholder => line.includes(placeholder))) return;
+        for (const line of lines) {
+            if (mediaPlaceholders.some(placeholder => line.includes(placeholder))) continue;
 
-        const match = line.match(regex);
-        if (match) {
-            validMessageCount++;
-            const num1 = match[1];
-            const num2 = match[2];
-            const year = match[3];
-            const hour = match[4];
-            const minute = match[5];
-            const second = match[6] || '00';
-            const sender = match[7].trim();
+            const match = line.match(regex);
+            if (match) {
+                validMessageCount++;
+                const num1 = match[1];
+                const num2 = match[2];
+                const year = match[3];
+                let hour = parseInt(match[4], 10);
+                const minute = match[5];
+                const second = match[6] || '00';
+                const period = match[7]; // AM/PM
+                const sender = match[8].trim();
 
-            const day = dateFormat === 'US' ? num2.padStart(2, '0') : num1.padStart(2, '0');
-            const month = dateFormat === 'US' ? num1.padStart(2, '0') : num2.padStart(2, '0');
-            const formattedDate = `${year}-${month}-${day}`;
-            const timestamp = new Date(`${formattedDate}T${hour.padStart(2, '0')}:${minute}:${second.padStart(2, '0')}`);
-            const monthNum = parseInt(month, 10);
-            const monthName = monthNames[monthNum - 1];
-            const dateObj = new Date(formattedDate);
-            const weekdayName = weekdayNames[dateObj.getDay()];
+                // Convert 12-hour to 24-hour format if needed
+                if (period) {
+                    if (period === 'PM' && hour < 12) {
+                        hour += 12;
+                    } else if (period === 'AM' && hour === 12) {
+                        hour = 0;
+                    }
+                }
 
-            if (previousTimestamp && (timestamp - previousTimestamp) > conversationGap) {
-                finalizeConversation(currentConversation, conversations, minMessages);
-                currentConversation = [];
-            }
+                const day = dateFormat === 'US' ? num2.padStart(2, '0') : num1.padStart(2, '0');
+                const month = dateFormat === 'US' ? num1.padStart(2, '0') : num2.padStart(2, '0');
+                const formattedDate = `${year}-${month}-${day}`;
+                const timestamp = new Date(`${formattedDate}T${hour.toString().padStart(2, '0')}:${minute}:${second.padStart(2, '0')}`);
 
-            if (currentConversation.length >= 3) {
-                const lastThreeSenders = currentConversation.slice(-3).map(m => m.sender);
-                if (new Set(lastThreeSenders).size === 1) {
-                    currentConversation = currentConversation.slice(0, -3);
+                if (isNaN(timestamp.getTime())) {
+                    console.warn('Invalid timestamp for line:', line);
+                    continue;
+                }
+
+                const monthNum = parseInt(month, 10);
+                const monthName = monthNames[monthNum - 1];
+                const dateObj = new Date(formattedDate);
+                const weekdayName = weekdayNames[dateObj.getDay()];
+
+                if (previousTimestamp && (timestamp - previousTimestamp) > conversationGap) {
                     finalizeConversation(currentConversation, conversations, minMessages);
                     currentConversation = [];
                 }
+
+                if (currentConversation.length >= 3) {
+                    const lastThreeSenders = currentConversation.slice(-3).map(m => m.sender);
+                    if (new Set(lastThreeSenders).size === 1) {
+                        currentConversation = currentConversation.slice(0, -3);
+                        finalizeConversation(currentConversation, conversations, minMessages);
+                        currentConversation = [];
+                    }
+                }
+
+                currentConversation.push({
+                    sender: sender,
+                    timestamp: timestamp,
+                    text: line.split(": ").slice(1).join(": ")
+                });
+                previousTimestamp = timestamp;
+
+                stats[sender] = (stats[sender] || 0) + 1;
+                allDays.add(formattedDate);
+                daysPerMonth[monthName].add(formattedDate);
+                messageCounts[formattedDate] = messageCounts[formattedDate] || {};
+                messageCounts[formattedDate][sender] = (messageCounts[formattedDate][sender] || 0) + 1;
+                hourlySenderStats[parseInt(hour)][sender] = (hourlySenderStats[parseInt(hour)][sender] || 0) + 1;
+                hourlySendersSet.add(sender);
+                perMonthCounts[monthName][sender] = (perMonthCounts[monthName][sender] || 0) + 1;
+                perWeekdayCounts[weekdayName][sender] = (perWeekdayCounts[weekdayName][sender] || 0) + 1;
+
+                if (!startDate || timestamp < startDate) startDate = timestamp;
+                if (!endDate || timestamp > endDate) endDate = timestamp;
             }
-
-            currentConversation.push({
-                sender: sender,
-                timestamp: timestamp,
-                text: line.split(": ").slice(1).join(": ")
-            });
-            previousTimestamp = timestamp;
-
-            stats[sender] = (stats[sender] || 0) + 1;
-            allDays.add(formattedDate);
-            daysPerMonth[monthName].add(formattedDate);
-            messageCounts[formattedDate] = messageCounts[formattedDate] || {};
-            messageCounts[formattedDate][sender] = (messageCounts[formattedDate][sender] || 0) + 1;
-            hourlySenderStats[parseInt(hour)][sender] = (hourlySenderStats[parseInt(hour)][sender] || 0) + 1;
-            hourlySendersSet.add(sender);
-            perMonthCounts[monthName][sender] = (perMonthCounts[monthName][sender] || 0) + 1;
-            perWeekdayCounts[weekdayName][sender] = (perWeekdayCounts[weekdayName][sender] || 0) + 1;
-
-            if (!startDate || dateObj < startDate) startDate = dateObj;
-            if (!endDate || dateObj > endDate) endDate = dateObj;
         }
-    });
 
-    
+        finalizeConversation(currentConversation, conversations, minMessages);
 
-    const columnChartData = generateColumnChartData(messageCounts, startDate, endDate);
-    const totalDays = allDays.size;
-
-    const hourlyData = [];
-    for (let hour = 0; hour < 24; hour++) {
-        const dataPoint = { hour: `${hour}:00` };
-        const sendersInHour = hourlySenderStats[hour];
-        for (const sender in sendersInHour) {
-            dataPoint[sender] = totalDays ? sendersInHour[sender] / totalDays : 0;
+        // Ensure we have valid stats before proceeding
+        if (Object.keys(stats).length === 0) {
+            throw new Error('No valid messages found in chat log');
         }
-        hourlyData.push(dataPoint);
+
+        const columnChartData = generateColumnChartData(messageCounts, startDate, endDate);
+        const totalDays = allDays.size;
+
+        const hourlyData = [];
+        for (let hour = 0; hour < 24; hour++) {
+            const dataPoint = { hour: `${hour}:00` };
+            const sendersInHour = hourlySenderStats[hour];
+            for (const sender in sendersInHour) {
+                dataPoint[sender] = totalDays ? sendersInHour[sender] / totalDays : 0;
+            }
+            hourlyData.push(dataPoint);
+        }
+
+        const monthlyData = monthNames.map(month => {
+            const sendersInMonth = perMonthCounts[month];
+            const daysInMonth = daysPerMonth[month].size;
+            const dataPoint = { month: month };
+            for (const sender in sendersInMonth) {
+                dataPoint[sender] = daysInMonth ? sendersInMonth[sender] / daysInMonth : 0;
+            }
+            return dataPoint;
+        });
+
+        const weekdayData = weekdayNames.map(weekday => {
+            const sendersInWeekday = perWeekdayCounts[weekday];
+            const daysInWeekday = Math.ceil(totalDays / 7);
+            const dataPoint = { weekday: weekday };
+            for (const sender in sendersInWeekday) {
+                dataPoint[sender] = daysInWeekday ? sendersInWeekday[sender] / daysInWeekday : 0;
+            }
+            return dataPoint;
+        });
+
+        // Store stats globally
+        window.stats = stats;
+
+        return { 
+            stats, 
+            columnChartData, 
+            dateRange: { startDate, endDate },
+            hourlyData,
+            hourlySenders: Array.from(hourlySendersSet),
+            monthlyData,
+            weekdayData,
+            conversations 
+        };
+    } catch (err) {
+        console.error('processChatLog error:', err);
+        return false;
     }
-
-    const monthlyData = monthNames.map(month => {
-        const sendersInMonth = perMonthCounts[month];
-        const daysInMonth = daysPerMonth[month].size;
-        const dataPoint = { month: month };
-        for (const sender in sendersInMonth) {
-            dataPoint[sender] = daysInMonth ? sendersInMonth[sender] / daysInMonth : 0;
-        }
-        return dataPoint;
-    });
-
-    const weekdayData = weekdayNames.map(weekday => {
-        const sendersInWeekday = perWeekdayCounts[weekday];
-        const daysInWeekday = Math.ceil(totalDays / 7);
-        const dataPoint = { weekday: weekday };
-        for (const sender in sendersInWeekday) {
-            dataPoint[sender] = daysInWeekday ? sendersInWeekday[sender] / daysInWeekday : 0;
-        }
-        return dataPoint;
-    });
-
-    finalizeConversation(currentConversation, conversations, minMessages);
-
-    // Ensure window.stats is populated
-    window.stats = stats;
-
-    return { 
-        stats, 
-        columnChartData, 
-        dateRange: { startDate, endDate },
-        hourlyData,
-        hourlySenders: Array.from(hourlySendersSet),
-        monthlyData,
-        weekdayData,
-        conversations 
-    };
-     } catch (err) {
-    console.error('processChatLog error:', err);
-    showChatTooShortPopup();
-    return false;
-  }
 }
-
-
 
 function finalizeConversation(conversation, conversations, minMessages) {
     if (conversation.length < minMessages) return;
@@ -788,8 +913,8 @@ function calculateAdditionalStats(text) {
     const lines = text.split('\n');
 
     const regex = window.chatFormat === 'bracket' 
-        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/
-        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\] ([^:]+): (.*)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? - ([^:]+): (.*)/;
     const uniqueWords = {}; // Track unique words per sender
     const wordCounts = {}; // Track word usage per sender
     const emojiCounts = {}; // Track emoji usage per sender
@@ -817,62 +942,64 @@ function calculateAdditionalStats(text) {
             if (mediaPlaceholders.some(placeholder => line.includes(placeholder))) return;
             const match = line.match(regex);
             if (match) {
-                const sender = match[7].trim();
-                const message = line.split(": ").slice(1).join(": ");
+                const sender = match[8]?.trim(); // Safe access with optional chaining
+                const message = match[9] || ''; // Fallback to empty string
 
-            // Track total messages per sender
-            totalMessagesPerSender[sender] = (totalMessagesPerSender[sender] || 0) + 1;
+                if (!sender) return;
 
-            // Track swear words
-            // Improved version
-            if (!totalSwearWordsPerSender[sender]) totalSwearWordsPerSender[sender] = 0;
-            const words = message.split(/\s+/).filter(word => word.trim() !== "");
-            words.forEach(word => {
-                const cleanWord = word.toLowerCase().replace(/[^\w\s]/g, ""); // Remove punctuation
-                if (cleanWord && swearWords.includes(cleanWord)) {
-                    totalSwearWordsPerSender[sender]++;
+                // Track total messages per sender
+                totalMessagesPerSender[sender] = (totalMessagesPerSender[sender] || 0) + 1;
+
+                // Track swear words
+                // Improved version
+                if (!totalSwearWordsPerSender[sender]) totalSwearWordsPerSender[sender] = 0;
+                const words = message.split(/\s+/).filter(word => word.trim() !== "");
+                words.forEach(word => {
+                    const cleanWord = word.toLowerCase().replace(/[^\w\s]/g, ""); // Remove punctuation
+                    if (cleanWord && swearWords.includes(cleanWord)) {
+                        totalSwearWordsPerSender[sender]++;
+                    }
+                });
+
+                // Track unique words
+                if (!uniqueWords[sender]) uniqueWords[sender] = new Set();
+                if (!wordCounts[sender]) wordCounts[sender] = {};
+                if (!totalWordsPerSender[sender]) totalWordsPerSender[sender] = 0;
+
+                // Update total words for the sender
+                totalWordsPerSender[sender] += words.length;
+
+                words.forEach(word => {
+                    const lowerWord = word.toLowerCase().replace(/[^\w\s]/g, ""); // Remove punctuation
+                    if (lowerWord.trim() !== "" && !stopWords.includes(lowerWord)) { // Exclude stop words
+                        uniqueWords[sender].add(lowerWord);
+                        wordCounts[sender][lowerWord] = (wordCounts[sender][lowerWord] || 0) + 1;
+
+                        // Track communal word counts
+                        communalWordCounts[lowerWord] = (communalWordCounts[lowerWord] || 0) + 1;
+                    }
+                });
+
+                // Track emoji usage
+                const emojis = message.match(emojiRegex) || [];
+                if (!emojiCounts[sender]) emojiCounts[sender] = {};
+
+                let previousEmoji = null;
+                emojis.forEach(emoji => {
+                    if (emoji !== previousEmoji) { // Ignore consecutive duplicates
+                        emojiCounts[sender][emoji] = (emojiCounts[sender][emoji] || 0) + 1;
+
+                        // Track communal emoji counts
+                        communalEmojiCounts[emoji] = (communalEmojiCounts[emoji] || 0) + 1;
+                        previousEmoji = emoji;
+                    }
+                });
+
+                // Track the longest message (in words)
+                const wordCount = words.length;
+                if (!longestMessage[sender] || wordCount > longestMessage[sender]) {
+                    longestMessage[sender] = wordCount;
                 }
-            });
-
-            // Track unique words
-            if (!uniqueWords[sender]) uniqueWords[sender] = new Set();
-            if (!wordCounts[sender]) wordCounts[sender] = {};
-            if (!totalWordsPerSender[sender]) totalWordsPerSender[sender] = 0;
-
-            // Update total words for the sender
-            totalWordsPerSender[sender] += words.length;
-
-            words.forEach(word => {
-                const lowerWord = word.toLowerCase().replace(/[^\w\s]/g, ""); // Remove punctuation
-                if (lowerWord.trim() !== "" && !stopWords.includes(lowerWord)) { // Exclude stop words
-                    uniqueWords[sender].add(lowerWord);
-                    wordCounts[sender][lowerWord] = (wordCounts[sender][lowerWord] || 0) + 1;
-
-                    // Track communal word counts
-                    communalWordCounts[lowerWord] = (communalWordCounts[lowerWord] || 0) + 1;
-                }
-            });
-
-            // Track emoji usage
-            const emojis = message.match(emojiRegex) || [];
-            if (!emojiCounts[sender]) emojiCounts[sender] = {};
-
-            let previousEmoji = null;
-            emojis.forEach(emoji => {
-                if (emoji !== previousEmoji) { // Ignore consecutive duplicates
-                    emojiCounts[sender][emoji] = (emojiCounts[sender][emoji] || 0) + 1;
-
-                    // Track communal emoji counts
-                    communalEmojiCounts[emoji] = (communalEmojiCounts[emoji] || 0) + 1;
-                    previousEmoji = emoji;
-                }
-            });
-
-            // Track the longest message (in words)
-            const wordCount = words.length;
-            if (!longestMessage[sender] || wordCount > longestMessage[sender]) {
-                longestMessage[sender] = wordCount;
-            }
             }
             
         
@@ -921,94 +1048,49 @@ function calculateAdditionalStats(text) {
 }
 
 
-
 function calculateDoubleMessages(text) {
     const lines = text.split('\n');
     const regex = window.chatFormat === 'bracket' 
-        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/
-        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\] ([^:]+):/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? - ([^:]+):/;
+    
     let previousSender = null;
-    const doubleMessageCounts = {}; // Initialize the object
+    const doubleMessageCounts = {};
+    
     lines.forEach(line => {
         const match = line.match(regex);
         if (match) {
-            const sender = match[7].trim();
+            // Group indices:
+            // [1] = month
+            // [2] = day
+            // [3] = year
+            // [4] = hour
+            // [5] = minute
+            // [6] = seconds (optional)
+            // [7] = AM/PM (optional)
+            // [8] = sender
+            const sender = match[8]?.trim(); // Changed from 7 to 8 and added optional chaining
+            
+            if (!sender) return; // Skip if no sender found
+            
             if (sender === previousSender) {
                 doubleMessageCounts[sender] = (doubleMessageCounts[sender] || 0) + 1;
             }
             previousSender = sender;
         }
     });
+    
     return doubleMessageCounts;
 }
-
-// function calculateResponseTimes(text, region) {
-//     const lines = text.split('\n');
-//     const responseTimes = {}; // Track response times for each sender
-//     const immediateReplies = {}; // Track immediate replies (within 1 minute) for each sender
-//     const totalReplies = {}; // Track total replies for each sender
-//     let previousSender = null; // Track the sender of the previous message
-//     let previousTimestamp = null; // Track the timestamp of the previous message
-
-//     // Regex to extract date, time, and sender from each line
-//     const regex = /\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\] ([^:]+):/;
-
-//     lines.forEach(line => {
-//         const match = line.match(regex);
-//         if (match) {
-//             // Extract date, time, and sender
-//             const day = region === "US" ? match[2] : match[1];
-//             const month = region === "US" ? match[1] : match[2];
-//             const year = match[3];
-//             const hour = match[4];
-//             const minute = match[5];
-//             const second = match[6];
-//             const sender = match[7].trim();
-
-//             // Convert to timestamp (in milliseconds)
-//             const currentTimestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
-
-//             // Check if the current sender is different from the previous sender
-//             if (previousSender && sender !== previousSender) {
-//                 const timeDiff = currentTimestamp - previousTimestamp; // Calculate time difference
-//                 responseTimes[previousSender] = responseTimes[previousSender] || { totalTime: 0, count: 0 };
-//                 responseTimes[previousSender].totalTime += timeDiff;
-//                 responseTimes[previousSender].count += 1;
-
-//                 // Check if the reply was immediate (within 1 minute)
-//                 if (timeDiff <= 60 * 1000) {
-//                     immediateReplies[previousSender] = (immediateReplies[previousSender] || 0) + 1;
-//                 }
-
-//                 // Track total replies
-//                 totalReplies[previousSender] = (totalReplies[previousSender] || 0) + 1;
-//             }
-
-//             // Update previous sender and timestamp
-//             previousSender = sender;
-//             previousTimestamp = currentTimestamp;
-//         }
-//     });
-
-//     // Calculate average response time and immediate reply percentage for each sender
-//     const stats = {};
-//     for (const sender in responseTimes) {
-//         const averageTime = responseTimes[sender].totalTime / responseTimes[sender].count; // Average in milliseconds
-//         const immediatePercentage = ((immediateReplies[sender] || 0) / (totalReplies[sender] || 1)) * 100; // Percentage of immediate replies
-
-//         stats[sender] = {
-//             averageTime: (averageTime / 1000 / 60).toFixed(1), // Convert to minutes
-//             immediatePercentage: immediatePercentage.toFixed(1), // Round to 1 decimal place
-//         };
-//     }
-
-//     return stats;
-// }
 
 function generateColumnChartData(messageCounts, startDate, endDate) {
     if (!startDate || !endDate) {
         console.warn('Invalid date range for column chart');
         return { data: [], senders: [] };
+    }
+
+    if (startDate > endDate) {
+        [startDate, endDate] = [endDate, startDate]; // Swap dates
     }
 
     const daysDifference = (endDate - startDate) / (1000 * 60 * 60 * 24);
@@ -1056,20 +1138,31 @@ function calculateChatFocus(text, senders) {
     let totalFocusedMessages = 0;
 
     const regex = window.chatFormat === 'bracket'
-        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.+)/
-        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.+)/;
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\] ([^:]+): (.+)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? - ([^:]+): (.+)/;
 
     lines.forEach(line => {
         const match = line.match(regex);
         if (match) {
-            const sender = match[7].trim();
-            const message = match[8].toLowerCase().replace(/[^\w\s]/g, ' ');
+            // Group indices:
+            // [1] = month
+            // [2] = day
+            // [3] = year
+            // [4] = hour
+            // [5] = minute
+            // [6] = seconds (optional)
+            // [7] = AM/PM (optional)
+            // [8] = sender
+            // [9] = message
+            const sender = match[8]?.trim(); // Changed from 7 to 8
+            const message = (match[9] || '').toLowerCase().replace(/[^\w\s]/g, ' '); // Changed from 8 to 9
+
+            if (!sender || senders.length < 2) return; // Safety check
 
             const nameA = senders[0].toLowerCase();
             const nameB = senders[1].toLowerCase();
             const isAboutSelf = /\b(i\s|i'm|im|i’ll|i will|i am|i've|ive|i have|i do|i did|i was|i feel|i think|me|my|mine|myself|i want|i need|i can't|i cannot|i don't|i wont|i shouldn't|i hate|i like|i love|i prefer|i hope|i believe|i guess|i suppose|i assume|i wonder|i know|i understand|i see|i thought|i wish)\b/i.test(message);
             const isAboutOther = /\b(you\s|you're\s|you are\s|youre\s|you'll\s|you will\s|you've\s|you have\s|you do\s|you did\s|you were\s|you feel\s|you think\s|ur\s|your\s|yours\s|yourself\s|you want\s|you need\s|you can't\s|you cannot\s|you don't\s|you shouldn’t\s|you hate\s|you like\s|you love\s|you prefer\s|you hope\s|you believe\s|you guess\s|you suppose\s|you assume\s|you wonder\s|you know\s|you understand\s|you see\s|you thought\s|you wish\s)/i.test(message);
-
 
             let focus = null;
             if (sender === senders[0]) {
@@ -1117,15 +1210,26 @@ function analyzeContent(text) {
 
     const senders = Object.keys(window.stats || {});
     const regex = window.chatFormat === 'bracket'
-        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.+)/
-        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.+)/;
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\] ([^:]+): (.+)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? - ([^:]+): (.+)/;
 
     lines.forEach(line => {
         const match = line.match(regex);
         if (match) {
-            const sender = match[7].trim();
-            // Remove only invisible characters, preserve emojis
-            const message = match[8].toLowerCase().replace(/[\u200E\u200F]/g, '');
+            // Group indices:
+            // [1] = month
+            // [2] = day
+            // [3] = year
+            // [4] = hour
+            // [5] = minute
+            // [6] = seconds (optional)
+            // [7] = AM/PM (optional)
+            // [8] = sender
+            // [9] = message
+            const sender = match[8]?.trim(); // Changed from 7 to 8
+            const message = (match[9] || '').toLowerCase().replace(/[\u200E\u200F]/g, ''); // Changed from 8 to 9
+
+            if (!sender) return; // Skip if no sender found
 
             // Text-based laughter with word boundaries
             const textLaughPatterns = /\b(lol|lmao|lmfao|rofl|haha|hehe|hahaha|hahahaha|hah|heh|bahaha|xd|lulz|lool|lel|lawl)\b/;
@@ -1183,47 +1287,72 @@ function analyzeInteractions(text) {
 
 function analyzeCalls(text) {
     const lines = text.split('\n');
-    const regex = window.chatFormat === 'bracket' 
-        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.+)/
-        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.+)/;
     const callStats = { total: 0, longestCalls: [] };
+    
+    // More flexible regex pattern to match call entries
+    const callRegex = /(?:Voice|Video) call, (\d+ (?:min|sec|hour|hr|h|m|s))/;
+    
     lines.forEach(line => {
-        const cleanLine = line.replace(/[\u200E\u200F]/g, "");
-        const match = cleanLine.match(regex);
-        if (match) {
-            const callText = match[8].trim();
-            const isVoiceCall = callText.startsWith("Voice call");
-            const isVideoCall = callText.startsWith("Video call");
-            if (isVoiceCall || isVideoCall) {
-                callStats.total++;
-                const duration = extractCallDuration(callText);
+        // More thorough cleaning of special characters
+        const cleanLine = line.replace(/[\u200E-\u200F\u202A-\u202E]/g, "").trim();
+        
+        // Check if line contains a call entry
+        if (cleanLine.includes("Voice call") || cleanLine.includes("Video call")) {
+            callStats.total++;
+            
+            // Extract call duration
+            const callMatch = cleanLine.match(callRegex);
+            if (callMatch) {
+                const durationText = callMatch[1];
+                const duration = parseDuration(durationText);
+                
                 if (duration > 0) {
+                    // Extract sender - this might need adjustment based on your full log format
+                    const senderMatch = cleanLine.match(/(?:^|\])\s*([^:]+?):/);
+                    const sender = senderMatch ? senderMatch[1].trim() : "Unknown";
+                    
                     callStats.longestCalls.push({
-                        sender: match[7].trim(),
+                        sender: sender,
                         duration: duration,
                         formattedDuration: formatDuration(duration),
-                        type: isVideoCall ? "Video" : "Voice"
+                        type: cleanLine.includes("Video call") ? "Video" : "Voice"
                     });
                 }
             }
         }
     });
+    
     callStats.longestCalls.sort((a, b) => b.duration - a.duration);
     callStats.longestCalls = callStats.longestCalls.slice(0, 3);
     window.callStats = callStats;
     return callStats;
 }
 
-
-function formatDuration(minutes) {
-    const mins = Math.floor(minutes);
-    const secs = Math.round((minutes - mins) * 60);
+// Helper function to parse duration text into seconds
+function parseDuration(durationText) {
+    const parts = durationText.split(' ');
+    const value = parseInt(parts[0]);
+    const unit = parts[1].toLowerCase();
     
-    if (mins > 0) {
-        return `${mins} min`;
-    } else {
-        return `${secs} sec`;
+    switch (unit) {
+        case 'hour': case 'hr': case 'h': return value * 3600;
+        case 'min': case 'm': return value * 60;
+        case 'sec': case 's': return value;
+        default: return 0;
     }
+}
+
+// Helper function to format seconds into HH:MM:SS
+function formatDuration(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    return [
+        hours.toString().padStart(2, '0'),
+        minutes.toString().padStart(2, '0'),
+        secs.toString().padStart(2, '0')
+    ].join(':');
 }
 
 function extractCallDuration(callText) {
@@ -1250,28 +1379,38 @@ function calculateConvoStats(text) {
     const lines = text.split('\n');
     
     const regex = window.chatFormat === 'bracket' 
-        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/
-        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
-    const parsedMessages = [];
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\] ([^:]+):/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? - ([^:]+):/;
+    
+    const messages = [];
     lines.forEach(line => {
         const match = line.match(regex);
         if (match) {
+            // Group indices are different for bracket vs android format
             const num1 = match[1];
             const num2 = match[2];
             const year = match[3];
             const hour = match[4];
             const minute = match[5];
             const second = match[6] || '00';
-            const sender = match[7].trim();
+            const sender = match[8].trim(); // Group 8 for both formats now
+            const message = match[9] || ''; // Group 9 for message content
+            
             const day = window.dateFormat === 'US' ? num2.padStart(2, '0') : num1.padStart(2, '0');
             const month = window.dateFormat === 'US' ? num1.padStart(2, '0') : num2.padStart(2, '0');
             const timestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
-            parsedMessages.push({ timestamp, sender, line });
+            
+            messages.push({ 
+                sender, 
+                message,
+                timestamp,
+                line 
+            });
         }
     });
-    
+
     // Sort messages by time (already sorted in original, but ensures consistency)
-    parsedMessages.sort((a, b) => a.timestamp - b.timestamp);
+    messages.sort((a, b) => a.timestamp - b.timestamp);
 
     // Group messages into conversations (unchanged)
     const maxGap = 10 * 60 * 1000;      // 10 minutes between messages
@@ -1282,13 +1421,13 @@ function calculateConvoStats(text) {
     let candidateConvos = [];
     let currentGroup = [];
     
-    for (let i = 0; i < parsedMessages.length; i++) {
-        const message = parsedMessages[i];
+    for (let i = 0; i < messages.length; i++) {
+        const message = messages[i];
         
         if (currentGroup.length === 0) {
             currentGroup.push(message);
         } else {
-            const gap = message.timestamp - parsedMessages[i - 1].timestamp;
+            const gap = message.timestamp - messages[i - 1].timestamp;
             
             if (currentGroup.length >= 3) {
                 const lastThreeSenders = currentGroup.slice(-3).map(m => m.sender);
@@ -1364,48 +1503,50 @@ function calculateConvoStats(text) {
     // Calculate average conversation length
     const totalMessages = mergedConvos.reduce((sum, conv) => sum + conv.messageCount, 0);
     const overallAverage = mergedConvos.length > 0 ? totalMessages / mergedConvos.length : 0;
-// Calculate message counts for frequency comparison
-const endDate = parsedMessages.length > 0 
-    ? new Date(parsedMessages[parsedMessages.length - 1].timestamp)
-    : new Date(); // Fallback to current date if no messages
 
-const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-const last30Start = endDate.getTime() - thirtyDays;
-const prev30Start = last30Start - thirtyDays;
+    // Calculate message counts for frequency comparison
+    const endDate = messages.length > 0 
+        ? new Date(messages[messages.length - 1].timestamp)
+        : new Date(); // Fallback to current date if no messages
 
-// Calculate message counts
-const messagesLast30 = parsedMessages.filter(msg => 
-    msg.timestamp >= last30Start && msg.timestamp <= endDate.getTime()
-).length;
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    const last30Start = endDate.getTime() - thirtyDays;
+    const prev30Start = last30Start - thirtyDays;
 
-const messagesPrev30 = parsedMessages.filter(msg => 
-    msg.timestamp >= prev30Start && msg.timestamp < last30Start
-).length;
+    // Calculate message counts
+    const messagesLast30 = messages.filter(msg => 
+        msg.timestamp >= last30Start && msg.timestamp <= endDate.getTime()
+    ).length;
 
-// Calculate percentage change and trend
-let freqPercentageChange = 0;
-let trend = "none";
+    const messagesPrev30 = messages.filter(msg => 
+        msg.timestamp >= prev30Start && msg.timestamp < last30Start
+    ).length;
 
-if (messagesLast30 > 0 || messagesPrev30 > 0) {
-    if (messagesPrev30 === 0) {
-        trend = messagesLast30 > 0 ? "up" : "none";
-        freqPercentageChange = messagesLast30 > 0 ? 100 : 0; // 100% increase if no previous messages
-    } else {
-        freqPercentageChange = ((messagesLast30 - messagesPrev30) / messagesPrev30) * 100;
-        trend = freqPercentageChange > 0 ? "up" : 
-                freqPercentageChange < 0 ? "down" : "equal";
+    // Calculate percentage change and trend
+    let freqPercentageChange = 0;
+    let trend = "none";
+
+    if (messagesLast30 > 0 || messagesPrev30 > 0) {
+        if (messagesPrev30 === 0) {
+            trend = messagesLast30 > 0 ? "up" : "none";
+            freqPercentageChange = messagesLast30 > 0 ? 100 : 0; // 100% increase if no previous messages
+        } else {
+            freqPercentageChange = ((messagesLast30 - messagesPrev30) / messagesPrev30) * 100;
+            trend = freqPercentageChange > 0 ? "up" : 
+                    freqPercentageChange < 0 ? "down" : "equal";
+        }
     }
+
+    return {
+        averageLength: overallAverage.toFixed(1),
+        frequencyLast30: messagesLast30,
+        frequencyPrev30: messagesPrev30,
+        freqPercentageChange: Number(freqPercentageChange.toFixed(1)),
+        trend: trend,
+        totalConversations: mergedConvos.length
+    };
 }
 
-return {
-    averageLength: overallAverage.toFixed(1),
-    frequencyLast30: messagesLast30,
-    frequencyPrev30: messagesPrev30,
-    freqPercentageChange: Number(freqPercentageChange.toFixed(1)),
-    trend: trend,
-    totalConversations: mergedConvos.length
-};
-}
 
 function calculateEngagementRatio(conversations) {
     const senders = Object.keys(window.stats);
@@ -1484,10 +1625,11 @@ function calculateEngagementRatio(conversations) {
 // Add this function to fileProcessor.js
 function calculateStreakStats(text) {
     const lines = text.split('\n');
-    // Regex for format: "[12/04/2023, 17:09:50] Camille: Message"
+    // Updated regex to support both 12-hour (with AM/PM) and 24-hour formats
     const regex = window.chatFormat === 'bracket' 
-        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):/
-        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+):/;
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\] ([^:]+):/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? - ([^:]+):/;
+    
     const dailyMessages = {};
     lines.forEach(line => {
         const match = line.match(regex);
@@ -1495,10 +1637,24 @@ function calculateStreakStats(text) {
             const num1 = match[1];
             const num2 = match[2];
             const year = match[3];
-            const sender = match[7].trim();
+            let hour = parseInt(match[4], 10);
+            const minute = match[5];
+            const second = match[6] || '00';
+            const period = match[7]; // AM/PM
+            const sender = match[8].trim(); // Updated group index due to added AM/PM capture
+
+            // Convert 12-hour to 24-hour format if needed
+            if (period) {
+                if (period === 'PM' && hour < 12) {
+                    hour += 12;
+                } else if (period === 'AM' && hour === 12) {
+                    hour = 0;
+                }
+            }
+
             const day = window.dateFormat === 'US' ? num2 : num1;
             const month = window.dateFormat === 'US' ? num1 : num2;
-            const dateKey = `${year}-${month}-${day}`;
+            const dateKey = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
             if (!dailyMessages[dateKey]) {
                 dailyMessages[dateKey] = { count: 0, senders: new Set() };
             }
@@ -1510,7 +1666,7 @@ function calculateStreakStats(text) {
     // Get sorted dates in ascending order.
     const sortedDates = Object.keys(dailyMessages).sort();
     
-    // Filter valid dates: at least 7 messages and at least 2 different senders.
+    // Filter valid dates: at least 3 messages and at least 2 different senders.
     const validDates = sortedDates.filter(date => {
         const info = dailyMessages[date];
         return info.count >= 3 && info.senders.size >= 2;
@@ -1565,7 +1721,6 @@ function calculateStreakStats(text) {
     };
 }
 
-
 function calculateGhostingStats(text) {
     const lines = text.split('\n');
     const ghostingCounts = {};
@@ -1573,7 +1728,6 @@ function calculateGhostingStats(text) {
     let previousMessage = null;
 
     const maxResponseThreshold = 5 * 24 * 60 * 60 * 1000; // 5 days in milliseconds
-
 
     const closingPhrases = [
         "bye", "goodbye", "good night", "gn", "night", "see you", "cya", "later", "ttyl",
@@ -1584,8 +1738,9 @@ function calculateGhostingStats(text) {
     const ghostingThreshold = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
 
     const regex = window.chatFormat === 'bracket' 
-        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.+)/
-        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.+)/;
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\] ([^:]+): (.+)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? - ([^:]+): (.+)/;
+    
     const messages = [];
     lines.forEach(line => {
         const match = line.match(regex);
@@ -1596,8 +1751,9 @@ function calculateGhostingStats(text) {
             const hour = match[4];
             const minute = match[5];
             const second = match[6] || '00';
-            const sender = match[7].trim();
-            const message = match[8].trim();
+            const sender = match[8].trim(); // Group 8 for sender
+            const message = match[9].trim(); // Group 9 for message
+            
             const day = window.dateFormat === 'US' ? num2.padStart(2, '0') : num1.padStart(2, '0');
             const month = window.dateFormat === 'US' ? num1.padStart(2, '0') : num2.padStart(2, '0');
             const timestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
@@ -1668,8 +1824,8 @@ function calculateGhostingStats(text) {
 export function calculateResponseTimes(text) {
     const lines = text.split('\n');
     const regex = window.chatFormat === 'bracket'
-        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+): (.*)/
-        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))? - ([^:]+): (.*)/;
+        ? /\[(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))?\] ([^:]+): (.*)/
+        : /^(\d{1,2})\/(\d{1,2})\/(\d{4}), (\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s(AM|PM))? - ([^:]+): (.*)/;
 
     const closingPatterns = [
         /^bye\b/i, /^goodbye\b/i, /\bthanks?\b/i, /\bthank you\b/i, /\bsee you\b/i,
@@ -1689,21 +1845,58 @@ export function calculateResponseTimes(text) {
         const match = line.match(regex);
         if (!match) continue;
 
-        const day = window.dateFormat === 'US' ? match[2].padStart(2, '0') : match[1].padStart(2, '0');
-        const month = window.dateFormat === 'US' ? match[1].padStart(2, '0') : match[2].padStart(2, '0');
-        const year = match[3];
-        const hour = match[4].padStart(2, '0');
-        const minute = match[5].padStart(2, '0');
-        const second = (match[6] || '00').padStart(2, '0');
-        const sender = match[7].trim();
-        const content = match[8].trim();
+        // Group indices depend on whether we have seconds and AM/PM
+        let groups;
+        if (window.chatFormat === 'bracket') {
+            groups = {
+                day: match[1],
+                month: match[2],
+                year: match[3],
+                hour: match[4],
+                minute: match[5],
+                second: match[6] || '00',
+                period: match[7],
+                sender: match[8].trim(),
+                content: match[9].trim()
+            };
+        } else { // android format
+            groups = {
+                day: match[1],
+                month: match[2],
+                year: match[3],
+                hour: match[4],
+                minute: match[5],
+                second: match[6] || '00',
+                period: match[7],
+                sender: match[8].trim(),
+                content: match[9].trim()
+            };
+        }
 
-        const timestamp = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
+        // Convert 12-hour to 24-hour format if needed
+        let hour = parseInt(groups.hour, 10);
+        if (groups.period) {
+            if (groups.period === 'PM' && hour < 12) {
+                hour += 12;
+            } else if (groups.period === 'AM' && hour === 12) {
+                hour = 0;
+            }
+        }
+
+        const day = window.dateFormat === 'US' ? groups.month.padStart(2, '0') : groups.day.padStart(2, '0');
+        const month = window.dateFormat === 'US' ? groups.day.padStart(2, '0') : groups.month.padStart(2, '0');
+        const timestamp = new Date(`${groups.year}-${month}-${day}T${hour.toString().padStart(2, '0')}:${groups.minute}:${groups.second}`).getTime();
+        
         if (!isNaN(timestamp)) {
-            messages.push({ sender, content, timestamp });
+            messages.push({ 
+                sender: groups.sender, 
+                content: groups.content, 
+                timestamp 
+            });
         }
     }
 
+    // Rest of the function remains the same...
     // Step 2: Sort messages by timestamp to ensure chronological order
     messages.sort((a, b) => a.timestamp - b.timestamp);
 
@@ -1745,7 +1938,6 @@ export function calculateResponseTimes(text) {
 
     return simplified;
 }
-
 
 function createDonutSegment(cx, cy, r_outer, r_inner, startAngle, endAngle, color) {
     const startRad = (startAngle - 90) * Math.PI / 180;
@@ -2386,36 +2578,6 @@ function showAnalysisCompletedPopup() {
     }, 3000);
     
     // Also remove when clicking outside
-    popup.addEventListener('click', (e) => {
-        if (e.target === popup) {
-            popup.remove();
-        }
-    });
-}
-
-function showAnalysisSavedPopup() {
-    const popup = document.createElement("div");
-    popup.className = "ai-popup";
-    popup.innerHTML = `
-        <div class="ai-popup-content">
-            <div class="ai-popup-header">
-                <h3 class="ai-popup-title">Analysis Saved</h3>
-                <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
-            </div>
-            <p class="ai-popup-message">Your chat analysis has been saved to your dashboard.</p>
-        </div>
-    `;
-    
-    document.body.appendChild(popup);
-    
-    // Remove the popup after 3 seconds
-    setTimeout(() => {
-        if (popup.parentElement) {
-            popup.parentElement.removeChild(popup);
-        }
-    }, 3000);
-    
-    // Remove when clicking outside
     popup.addEventListener('click', (e) => {
         if (e.target === popup) {
             popup.remove();

@@ -284,78 +284,59 @@
     
 
 <script>
-
   const stripe = Stripe('pk_live_51RT0vbHxX0u6szgbLpwT76FbcrAp7VlREAHwUCcERzsVDBBHYuncpjb9pp2JxzWE5fomVJ1Muu4k48EPQ1A6Mmz8004IQgrFnP');
 
   document.addEventListener('DOMContentLoaded', async () => {
-    // ─── PART A: CURRENCY CONVERSION ─────────────────────────────────────────
-    // 1) Detect user’s locale → currency code
-    const locale = navigator.language || 'en-US';
-    const localeToCurrency = {
-      'en-US': 'USD', 'en-GB': 'GBP', 'fr-FR': 'EUR',
-      'de-DE': 'EUR', 'ja-JP': 'JPY', 'en-CA': 'CAD',
-      'es-ES': 'EUR', 'pt-BR': 'BRL'
-    };
-    let currency = localeToCurrency[locale] 
-                 || localeToCurrency[locale.split('-')[0]] 
-                 || 'USD';
-
-    // 2) Fetch free exchange rates
-    let rates = null;
-    try {
-      const resp = await fetch('https://api.exchangerate.host/latest?base=USD');
-      const data = await resp.json();
-      if (data && data.rates) rates = data.rates;
-    } catch (e) {
-      console.warn('Could not load rates; falling back to USD:', e);
-      rates = null;
-      currency = 'USD';
+    // ─── SIMPLIFIED CURRENCY HANDLING ───────────────────────────────────────
+    // 1) Detect user's preferred currency based on browser language or location
+    let currency = 'USD'; // default
+    const userLanguage = navigator.language || 'en-US';
+    const isUK = userLanguage.includes('en-GB') || userLanguage.includes('en-UK');
+    
+    // Alternatively, you could use geolocation (but requires permission)
+    // For now, we'll just use language detection
+    if (isUK) {
+      currency = 'GBP';
     }
 
-    // 3) Update every .price[data-usd-price]
-    const zeroDecimal = new Set(['JPY','KRW','VND']);
-    const currencySymbols = {
-      USD: '$', EUR: '€', GBP: '£', JPY: '¥', CAD: 'CA$', BRL: 'R$'
+    // 2) Define our fixed exchange rates (no API needed)
+    const exchangeRates = {
+      USD: 1,
+      GBP: 0.79 // Example rate, adjust as needed
     };
 
+    // 3) Update all price displays
     document.querySelectorAll('.price[data-usd-price]').forEach(el => {
-      const usd = parseFloat(el.dataset.usdPrice);
-      if (currency === 'USD' || !rates || !rates[currency]) {
-        el.innerText = '$' + usd.toFixed(2);
-        el.dataset.currency = 'USD';
-        el.dataset.minorUnit = Math.round(usd * 100);
-        return;
-      }
-      const raw = usd * rates[currency];
-      let displayAmt, minorUnit;
-      if (zeroDecimal.has(currency)) {
-        displayAmt = Math.round(raw).toString();
-        minorUnit   = Math.round(raw);
+      const usdPrice = parseFloat(el.dataset.usdPrice);
+      let displayPrice, minorUnit;
+      
+      if (currency === 'GBP') {
+        const gbpPrice = usdPrice * exchangeRates.GBP;
+        displayPrice = '£' + gbpPrice.toFixed(2);
+        minorUnit = Math.round(gbpPrice * 100);
+        el.dataset.currency = 'GBP';
       } else {
-        displayAmt = raw.toFixed(2);
-        minorUnit   = Math.round(raw * 100);
+        displayPrice = '$' + usdPrice.toFixed(2);
+        minorUnit = Math.round(usdPrice * 100);
+        el.dataset.currency = 'USD';
       }
-      const symbol = currencySymbols[currency] || (currency + ' ');
-      el.innerText = symbol + displayAmt;
-      el.dataset.currency = currency;
+      
+      el.innerText = displayPrice;
       el.dataset.minorUnit = minorUnit;
     });
 
-    // 4) Expose for later
+    // 4) Expose for later use
     window.selectedCurrency = currency;
-    window.rates = rates;
-    window.zeroDecimal = zeroDecimal;
-    window.currencySymbols = currencySymbols;
 
-    // ─── PART B: PLAN SELECTION ────────────────────────────────────────────────
-    // (1) Plan buttons: use data-usd-price instead of data-price
+    // ─── REST OF YOUR EXISTING CODE ─────────────────────────────────────────
+    // (Keep all the plan selection and Stripe checkout logic the same)
     let selectedPlan = null;
     document.querySelectorAll('.select-plan').forEach(button => {
       button.addEventListener('click', () => {
         selectedPlan = {
           id: button.dataset.plan,
           amount: button.dataset.amount,
-          price: button.dataset.usdPrice, // was dataset.price → now dataset.usdPrice
+          price: button.dataset.usdPrice,
           name: button.closest('.pricing-card').querySelector('h3').textContent
         };
         console.log('Plan selected:', selectedPlan);
@@ -370,16 +351,18 @@
         document.getElementById('selectedPlanName').innerText = selectedPlan.name;
         document.getElementById('selectedPlanCredits').innerText = selectedPlan.amount + ' Credits';
         const priceEl = document.querySelector(`.price[data-usd-price="${selectedPlan.price}"]`);
-        const symbol = priceEl ? (priceEl.innerText[0] || '$') : '$';
-        document.getElementById('selectedPlanPrice').innerText = symbol + selectedPlan.price;
-
+        const symbol = currency === 'GBP' ? '£' : '$';
+        const convertedPrice = currency === 'GBP' 
+          ? (parseFloat(selectedPlan.price) * exchangeRates.GBP).toFixed(2)
+          : selectedPlan.price;
+        document.getElementById('selectedPlanPrice').innerText = symbol + convertedPrice;
 
         document.getElementById('paymentSection').style.display = 'block';
         document.getElementById('paymentSection').scrollIntoView({ behavior: 'smooth' });
       });
     });
 
-    // ─── PART C: STRIPE CLICK HANDLER ───────────────────────────────────────────
+    // Stripe click handler remains the same
     document.querySelector('.stripe-checkout').addEventListener('click', async function() {
       if (!selectedPlan) {
         alert('Please select a plan first');
@@ -389,7 +372,7 @@
       this.textContent = 'Processing…';
 
       try {
-        // 1) Wait for GoogleAuth userId
+        // Wait for GoogleAuth userId
         const userId = await new Promise(resolve => {
           const check = () => {
             const id = localStorage.getItem('userId');
@@ -400,30 +383,28 @@
         });
         if (!userId) throw new Error('User not authenticated');
 
-        // 2) Compute stripeAmount
+        // Compute stripeAmount based on selected currency
         const usdPrice = parseFloat(selectedPlan.price);
-        const currency = window.selectedCurrency || 'USD';
-        let stripeAmount;
-        if (currency === 'USD') {
-          stripeAmount = Math.round(usdPrice * 100);
+        let stripeAmount, finalCurrency;
+        
+        if (window.selectedCurrency === 'GBP') {
+          finalCurrency = 'GBP';
+          stripeAmount = Math.round(usdPrice * exchangeRates.GBP * 100);
         } else {
-          // Find matching <div class="price"> so we get dataset.minorUnit
-          const priceEl = Array.from(document.querySelectorAll('.price[data-usd-price]'))
-                            .find(el => el.dataset.usdPrice === selectedPlan.price);
-          stripeAmount = priceEl
-                       ? parseInt(priceEl.dataset.minorUnit)
-                       : Math.round(usdPrice * 100);
+          finalCurrency = 'USD';
+          stripeAmount = Math.round(usdPrice * 100);
         }
+
         console.log('About to send to server:', {
           plan: selectedPlan.id,
           amount: selectedPlan.amount,
           name: selectedPlan.name,
-          currency,
+          currency: finalCurrency,
           stripeAmount,
           userId
         });
 
-        // 3) POST to server
+        // POST to server
         const resp = await fetch('/create-stripe-session', {
           method: 'POST',
           headers: {
@@ -434,20 +415,21 @@
             plan: selectedPlan.id,
             amount: selectedPlan.amount,
             name: selectedPlan.name,
-            currency,
+            currency: finalCurrency,
             stripeAmount
           })
         });
+        
         if (!resp.ok) {
-          // Log status and body for debugging
           const text = await resp.text();
           console.error('Stripe session creation failed. Status:', resp.status, text);
           throw new Error(`Failed to create payment session (Status ${resp.status})`);
         }
+        
         const { id: sessionId } = await resp.json();
         console.log('Stripe session ID:', sessionId);
 
-        // 4) Redirect
+        // Redirect
         const { error } = await stripe.redirectToCheckout({ sessionId });
         if (error) throw error;
       } catch (err) {

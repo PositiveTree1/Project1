@@ -180,7 +180,6 @@ function renderStackedColumnChart(columnChartData, callback) {
         };
 
         // Verify chart creation
-        console.log('Chart created successfully:', chart);
         if (callback) callback();
     
 }

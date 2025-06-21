@@ -4,6 +4,14 @@ const app     = express();
 const cors    = require('cors');
 const path    = require('path');
 
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+const TelegramBot = require('node-telegram-bot-api');
+
+const TELEGRAM_BOT_TOKEN = '7808203328:AAGIFiVVesX_BGAUN41FwmwHW7zYIV4roEE';
+const TELEGRAM_CHAT_ID = '7745229461';
+
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
 
 
 // Add webhook endpoint to handle payment completion
@@ -41,8 +49,30 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // 2️⃣ Now require Stripe, Firebase, etc.
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
 const admin  = require('firebase-admin');
+
+// Accept client-side error reports
+app.post('/api/log-client-error', express.json(), async (req, res) => {
+  try {
+    const { userId, message, source, lineno, colno, stack, context } = req.body;
+    await db.collection('clientErrors').add({
+      userId: userId || null,
+      message,
+      source,
+      lineno,
+      colno,
+      stack: stack || null,
+      context,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Failed to log client error:', err);
+    res.status(500).json({ error: 'Logging failed' });
+  }
+});
+
 
 
 
@@ -56,89 +86,26 @@ function requireAuth(req, res, next) {
 // … somewhere at the top of server.js:
 // (No need to import anything else; Node 18+ has global fetch.)
 
-async function convertUSDtoCurrency(usdAmount, targetCurrency) {
-  // If the caller asked for USD, just return it immediately:
-  if (targetCurrency === 'USD') {
-    return {
-      currency: 'USD',
-      minorUnit: Math.round(usdAmount * 100),
-    };
+
+
+// Add this near the top of server.js
+app.use((req, res, next) => {
+  // Extract language from Accept-Language header or default to English
+  const acceptLanguage = req.headers['accept-language'] || 'en';
+  let lang = 'en';
+  
+  // Simple language detection
+  if (acceptLanguage.includes('fr')) {
+    lang = 'fr';
+  } else if (acceptLanguage.includes('es')) {
+    lang = 'es';
+  } else if (acceptLanguage.includes('de')) {
+    lang = 'de';
   }
-
-  const API_URL = 'https://api.exchangerate.host/latest?base=USD';
-  let json;
-
-  try {
-    const resp = await fetch(API_URL);
-
-    // 1) If the HTTP status is not 200, log the status + body, then fallback:
-    if (!resp.ok) {
-      const bodyText = await resp.text();
-      console.error(
-        `❌ Exchange‐rate API returned HTTP ${resp.status}. Body:`,
-        bodyText
-      );
-      // Fallback to charging in USD
-      return {
-        currency: 'USD',
-        minorUnit: Math.round(usdAmount * 100),
-      };
-    }
-
-    // 2) Parse JSON; if parsing fails, catch below
-    json = await resp.json();
-  } catch (fetchErr) {
-    console.error(
-      '❌ convertUSDtoCurrency: failed to fetch/parsing exchange rates:',
-      fetchErr
-    );
-    // In case of ANY fetch/JSON error, fallback to USD:
-    return {
-      currency: 'USD',
-      minorUnit: Math.round(usdAmount * 100),
-    };
-  }
-
-  // 3) At this point, resp.ok was true and `json` was parsable, but json.rates might be missing
-  if (!json || typeof json.rates !== 'object') {
-    console.warn(
-      `⚠️ convertUSDtoCurrency: "rates" is not an object. Full response:`,
-      json
-    );
-    return {
-      currency: 'USD',
-      minorUnit: Math.round(usdAmount * 100),
-    };
-  }
-
-  const rate = json.rates[targetCurrency];
-  if (typeof rate !== 'number') {
-    console.warn(
-      `⚠️ convertUSDtoCurrency: no numeric rate for "${targetCurrency}". Rates received:`,
-      json.rates
-    );
-    return {
-      currency: 'USD',
-      minorUnit: Math.round(usdAmount * 100),
-    };
-  }
-
-  // 4) We have a valid rate. Compute raw amount.
-  const raw = usdAmount * rate;
-  const zeroDecimalSet = new Set(['JPY', 'KRW', 'VND']);
-  if (zeroDecimalSet.has(targetCurrency)) {
-    // Zero‐decimal currencies charge in whole units
-    return {
-      currency: targetCurrency,
-      minorUnit: Math.round(raw),
-    };
-  } else {
-    return {
-      currency: targetCurrency,
-      minorUnit: Math.round(raw * 100),
-    };
-  }
-}
+  
+  req.lang = lang;
+  next();
+});
 
 
 // ─────────── 7️⃣ CREATE‐CHECKOUT ENDPOINT ───────────
@@ -171,24 +138,18 @@ app.post('/create-stripe-session', async (req, res) => {
     const usdPrice = PLAN_PRICES_USD[plan];
 
     // 4c. Determine the target currency
+    // In your /create-stripe-session endpoint, replace the currency conversion logic with:
     const targetCurrency = (clientCurrency || 'USD').toUpperCase();
-    const allowed = ['USD','EUR','GBP','JPY','CAD','BRL'];
+    const allowed = ['USD', 'GBP']; // Only these two currencies
     if (!allowed.includes(targetCurrency)) {
       console.error(`❌ Unsupported currency: "${targetCurrency}"`);
       return res.status(400).json({ error: 'Unsupported currency' });
     }
 
-    // 4d. Perform server-side conversion (and catch any fetch errors)
-    let finalCurrency, minorUnit;
-    try {
-      ({ currency: finalCurrency, minorUnit } = await convertUSDtoCurrency(usdPrice, targetCurrency));
-      console.log(`→ Converted \$${usdPrice} USD → ${minorUnit} in minor units of ${finalCurrency}`);
-    } catch (convErr) {
-      console.error('❌ convertUSDtoCurrency threw an unexpected error:', convErr);
-      // As a fallback, charge in USD
-      finalCurrency = 'USD';
-      minorUnit = Math.round(usdPrice * 100);
-    }
+    // Skip the conversion API call and just use the amount sent from client
+    const finalCurrency = targetCurrency;
+    const minorUnit = req.body.stripeAmount; // Client already calculated this
+
 
     // 4e. Build the success/cancel URLs and log them
     const successUrl  = `${process.env.FRONTEND_URL}/credits.html?success=true&session_id={CHECKOUT_SESSION_ID}`;
@@ -335,6 +296,48 @@ app.get('/api/check-consent/:userId', async (req, res) => {
   }
 });
 
+
+async function notifyLogin(user) {
+    try {
+        // Get total user count from Firestore
+        const usersRef = db.collection('users');
+        const snapshot = await usersRef.count().get();
+        const totalUsers = snapshot.data().count;
+
+        await bot.sendMessage(
+            TELEGRAM_CHAT_ID,
+            `🔔 New login:\n` +
+            `👤 Name: ${user.name}\n` +
+            `📧 Email: ${user.email}\n` +
+            `🆔 User ID: ${user.id}\n\n` +
+            `📊 Total Users: ${totalUsers}`
+        );
+    } catch (err) {
+        console.error('Telegram notification failed:', err);
+    }
+}
+
+async function notifyAnalysis(userId, analysisType, creditsUsed = 0) {
+    try {
+        // Get user details from Firestore
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (!userDoc.exists) return;
+
+        const user = userDoc.data();
+        await bot.sendMessage(
+            TELEGRAM_CHAT_ID,
+            `📊 New analysis:\n` +
+            `👤 User: ${user.name || 'Unknown'}\n` +
+            `📧 Email: ${user.email || 'Unknown'}\n` +
+            `🆔 User ID: ${userId}\n` +
+            `🔍 Type: ${analysisType}\n` +
+            `🪙 Credits used: ${creditsUsed}`
+        );
+    } catch (err) {
+        console.error('Telegram notification failed:', err);
+    }
+}
+
 // POST /api/save-consent
 app.post('/api/save-consent', requireAuth, async (req, res) => {
 
@@ -471,6 +474,7 @@ app.get('/api/get-analysis/:userId/:analysisId', async (req, res) => {
 
 
 
+
 // API Routes
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyA0T79ZxJdQX4pFl7u1vGUwKHonq4QYBi0');
 const modelConfig = {
@@ -499,7 +503,13 @@ app.post('/api/analyze', async (req, res) => {
     try {
       const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleanJson); // This line fails on bad input
+      // Add this right before the return res.json(parsed):
+      const userId = req.body.userId; // You might need to add userId to the request body
+      if (userId) {
+          await notifyAnalysis(userId, "AI Analysis", 1); // Adjust credits used as needed
+      }
       return res.json(parsed);
+      
     } catch (e) {
       console.error("❌ Failed to parse AI JSON:", text); // <== add full logging
       return res.status(500).json({ error: "AI response format error", raw: text });
@@ -514,6 +524,8 @@ app.post('/api/analyze', async (req, res) => {
 
 const { OAuth2Client } = require('google-auth-library');
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+
 
 
 app.post('/api/verify-google-token', async (req, res) => {
@@ -544,15 +556,35 @@ app.post('/api/verify-google-token', async (req, res) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       credits: isNewUser ? 0 : userDoc.data().credits || 0 // Initialize credits if new user
     }, { merge: true });
-
+    // Notify Telegram about the new login
+    // Add this right before the res.json() at the end of the try block:
+    await notifyLogin({
+        id,
+        name,
+        email,
+        picture
+    });
     res.json({
       success: true,
       user: { id, name, email, picture }
     });
+    
   } catch (error) {
     console.error('Token verification failed:', error);
     res.status(400).json({ success: false, error: 'Invalid token' });
   }
+});
+
+
+app.post('/api/log-analysis', async (req, res) => {
+    try {
+        const { userId, analysisType } = req.body;
+        await notifyAnalysis(userId, analysisType, analysisType === 'AI' ? 1 : 0);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Analysis logging failed:', err);
+        res.status(500).json({ error: 'Logging failed' });
+    }
 });
 
 // Add this new endpoint

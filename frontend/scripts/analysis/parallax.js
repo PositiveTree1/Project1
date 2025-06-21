@@ -1,4 +1,22 @@
 window.skipSavedPopup = false;
+
+
+
+
+
+// Override console methods
+const originalConsoleLog = console.log;
+console.log = function (...args) {
+    originalConsoleLog.apply(console, args);
+};
+
+const originalConsoleError = console.error;
+console.error = function (...args) {
+    originalConsoleError.apply(console, args);
+};
+
+
+
 // parallax.js
 (function() {
     let dropZone, mobileUploadButton, desktopUploadButton;
@@ -79,6 +97,9 @@ window.skipSavedPopup = false;
     }
 
 async function processFile(useAI = false) {
+        console.log(`[LOG] About to call processSelectedFile(useAI=${useAI}) with file:`, window.selectedFile);
+
+    console.log('Processing file with AI:', useAI);
     try {
         startProcessing();
         window.useAIForProcessing = useAI;
@@ -103,8 +124,23 @@ async function processFile(useAI = false) {
                         showNoCreditsPopup(needed, credits);
                         // Fall back to basic analysis
                         await window.processSelectedFile(false);
-                        return;
-                    }
+                        try {
+                            const user = JSON.parse(localStorage.getItem('user') || '{}');
+                            if (user.sub) {
+                                await fetch('/api/log-analysis', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ 
+                                        userId: user.sub, 
+                                        analysisType: useAI ? 'AI' : 'Basic' 
+                                    })
+                                });
+                            }
+                        } catch (e) {
+                            console.error('Failed to log analysis:', e);
+                        }
+                            return;
+                        }
                 } catch (creditError) {
                     console.error('Credit check failed:', creditError);
                     // Fall back to basic analysis
@@ -115,8 +151,24 @@ async function processFile(useAI = false) {
         }
         
         await window.processSelectedFile(useAI);
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (user.sub) {
+                await fetch('/api/log-analysis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        userId: user.sub, 
+                        analysisType: useAI ? 'AI' : 'Basic' 
+                    })
+                });
+            }
+        } catch (e) {
+            console.error('Failed to log analysis:', e);
+        }
     } catch (error) {
         console.error('Error processing file:', error);
+        showErrorToUser('Processing failed. Please try again.');
         // Ensure we always show something to the user
         await window.processSelectedFile(false);
     } finally {
@@ -124,43 +176,26 @@ async function processFile(useAI = false) {
     }
 }
 
-function showAnalysisArrivingPopup() {
-    const popup = document.createElement("div");
-    popup.className = "ai-popup";
-    popup.innerHTML = `
-        <div class="ai-popup-content">
-            <div class="ai-popup-progress">
-                <div class="ai-popup-progress-bar"></div>
-            </div>
-            <div class="ai-popup-header">
-                <h3 class="ai-popup-title">AI Analysis Arriving</h3>
-                <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
-            </div>
-            <p class="ai-popup-message">Your deep AI chat analysis is going to appear shortly.</p>
-        </div>
+// Helper to show errors to the user
+function showErrorToUser(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.style.cssText = `
+        position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+        background: #ff5555; color: white; padding: 10px; border-radius: 5px; z-index: 1000;
     `;
-    
-    document.body.appendChild(popup);
-    
-    // Remove the popup after animation completes
-    setTimeout(() => {
-        if (popup.parentElement) {
-            popup.parentElement.removeChild(popup);
-        }
-    }, 3000);
-    
-    // Also remove when clicking outside
-    popup.addEventListener('click', (e) => {
-        if (e.target === popup) {
-            popup.remove();
-        }
-    });
+    errorDiv.textContent = message;
+    document.body.appendChild(errorDiv);
+    setTimeout(() => errorDiv.remove(), 5000);
 }
+
 function setupConsentButtons() {
     if (agreeConsentBtn && declineConsentBtn) {
         agreeConsentBtn.addEventListener('click', async () => {
+            window.currentAction = 'consent:agree';
+
             try {
-                const user = JSON.parse(localStorage.getItem('user') || {});
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
                 if (!user.sub) {
                     console.error('No user ID found');
                     hideConsentPopup();
@@ -206,8 +241,9 @@ function setupConsentButtons() {
         });
 
         declineConsentBtn.addEventListener('click', async () => {
+            window.currentAction = 'consent:decline';
             try {
-                const user = JSON.parse(localStorage.getItem('user') || {});
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
                 if (user.sub) {
                     await saveConsent(user.sub, false);
                 }
@@ -263,6 +299,7 @@ function setupConsentButtons() {
         // 1) Whenever “Process” is clicked, show spinner, then call window.processSelectedFile()
         // Replace the existing processButton click handler with this:
         processButton.addEventListener('click', async function(e) {
+            window.currentAction = 'process-file';
         e.stopPropagation();
 
         const fileInput = document.getElementById('fileInput');
@@ -347,11 +384,12 @@ function showNoCreditsPopup(needed = 1, current = 0) {
   `;
 
   document.body.appendChild(popup);
-  setTimeout(() => popup.remove(), 5000);
+  setTimeout(() => popup.remove(), 7000);
   popup.addEventListener('click', e => {
     if (e.target === popup) popup.remove();
   });
 }
+
 
 
 
@@ -422,6 +460,7 @@ function showNoCreditsPopup(needed = 1, current = 0) {
             const file = files[0];
             window.selectedFile = file;
             fileName.textContent = file.name;
+            console.log('Selected file:', file.name);
             fileInfo.style.display = 'flex';
             uploadText.textContent = 'File selected! Drop another to replace';
             processButton.disabled = false;
@@ -440,11 +479,17 @@ function showNoCreditsPopup(needed = 1, current = 0) {
             let isGroup = false;
             try {
                 let text;
-                if (file.name.endsWith('.zip')) {
+                if (await isZipFile(file)) {
+                    console.log('Detected ZIP by content/MIME, even if name lacks .zip');
                     const arrayBuffer = await file.arrayBuffer();
                     const zip = await JSZip.loadAsync(arrayBuffer);
                     const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
-                    if (!txtFile) throw new Error('No .txt file in ZIP');
+                    // if no .txt file found, console log 
+                    if (!txtFile) {
+                        console.warn('No .txt file found in ZIP:', file.name);
+                        return;
+                    }
+                    console.log('Reading text from ZIP file:', txtFile);
                     text = await zip.files[txtFile].async('text');
                 } else {
                     text = await file.text();
@@ -452,7 +497,11 @@ function showNoCreditsPopup(needed = 1, current = 0) {
 
                 // Only proceed if we got valid text content
                 if (typeof text === 'string') {
+                    const preview = text.split('\n').slice(0, 200);
+                console.log('[LOG] parallax.handleFiles preview of first 200 lines:');
+                preview.forEach((l, i) => console.log(`${i+1}: ${l}`));
                     const regex = /^\[?\d{1,2}\/\d{1,2}\/\d{4}.*?\] ?([^:]+):/gm;
+                    
                     const senders = new Set();
                     let match;
 
@@ -479,7 +528,11 @@ function showNoCreditsPopup(needed = 1, current = 0) {
         }
 
         async function getUncompressedTextSize(file) {
-            if (file.name.endsWith('.zip')) {
+            // show file name in console log
+            console.log('getUncompressedTextSize:', file.name);
+            
+            if (await isZipFile(file)) {
+                console.log('Calculating uncompressed size for ZIP file:', file.name);
                 const arrayBuffer = await file.arrayBuffer();
                 const zip = await JSZip.loadAsync(arrayBuffer);
                 const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
@@ -488,6 +541,19 @@ function showNoCreditsPopup(needed = 1, current = 0) {
             }
             return file.size;
         }
+
+        async function isZipFile(file) {
+    if (file.type === 'application/zip') return true;
+    // fallback: peek at the first two bytes
+    const buffer = await file.slice(0, 4).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B;
+    if (isZip) {
+        console.log(`Detected ZIP file by magic header (not by name): ${file.name}`);
+    }
+    return isZip;
+}
+
 
         // 5) Wire up drag/drop events to “handleFiles”
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
@@ -528,6 +594,12 @@ function showNoCreditsPopup(needed = 1, current = 0) {
         // 7) When user selects via the native file‐picker
         fileInput.addEventListener('change', function() {
             if (this.files.length) {
+                // show content of files in the console with a loop
+                console.log('Selected files:', this.files);
+                for (let i = 0; i < this.files.length; i++) {
+                    console.log(this.files[i].name);
+                }
+                
                 handleFiles(this.files);
             }
         });

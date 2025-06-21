@@ -5,7 +5,7 @@
     --primary-color2: #f3e5ff;
     --secondary-color: #852cdd;
     --accent-color: #9967c5;
-    --text-color: #333;
+    --text-color: #000000;
     --light-text: #440a7a;
     --background: #f3e5ff;
     --navBarAnalysis: #ffffff;
@@ -475,7 +475,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(145, 98, 189, 0.85); /* Updated to a semi-transparent primary color */
+    background: rgba(145, 98, 189, 0.90); /* Updated to a semi-transparent primary color */
     display: none; /* Hidden by default */
     align-items: center;
     justify-content: center;
@@ -492,7 +492,7 @@ body {
     width: 50px;
     height: 50px;
     border: 5px solid rgba(255, 255, 255, 0.3); /* Light white border for contrast */
-    border-top-color: var(--secondary-color); /* Use secondary color for the spinning top */
+    border-top-color: #9538ff; /* Use secondary color for the spinning top */
     border-radius: 50%;
     animation: spin 1s linear infinite;
     transform-origin: center;
@@ -507,14 +507,7 @@ body {
         transform: rotate(360deg);
     }
 }
-.loading-text {
-    margin-top: 15px; /* Slightly more spacing */
-    color: #ffffff; /* White for better contrast */
-    font-size: 18px; /* Slightly larger for readability */
-    font-weight: 500;
-    text-align: center;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow for depth */
-}
+
 
 /* Smooth scrolling */
 html {
@@ -2817,28 +2810,27 @@ select {
   /* Popup styles */
 
 /* Add these styles to your analysis.css file */
+/* Remove the slideUp animation and only keep slideDown */
 .ai-popup {
     position: fixed;
-    top: -100px; /* Start off-screen */
+    top: 0;
     left: 0;
     width: 100%;
     display: flex;
     justify-content: center;
-    align-items: flex-start; /* Align to top */
+    align-items: flex-start;
     z-index: 10000;
-    animation: slideDown 0.5s forwards, slideUp 0.5s forwards 2.5s;
+    animation: slideDown 0.5s forwards;
     padding-top: 20px;
 }
 
+/* Remove the second animation (slideUp) from the keyframes */
 @keyframes slideDown {
     from { top: -100px; }
     to { top: 0; }
 }
 
-@keyframes slideUp {
-    from { top: 0; }
-    to { top: -100px; }
-}
+
 
 .ai-popup-content {
     background: white;
@@ -2928,7 +2920,7 @@ select {
     height: 100%;
     background: var(--primary-color);
     width: 100%;
-    animation: progressBar 5s linear forwards;
+    animation: progressBar 7s linear forwards;
 }
 
 @keyframes progressBar {
@@ -2992,9 +2984,12 @@ select {
 }
 
 .loading-text {
-    color: var(--primary-color);
-    font-size: 16px;
+    margin-top: 15px;
+    color: white; /* Changed from #000000 to white */
+    font-size: 18px;
     font-weight: 500;
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 @keyframes spin {
@@ -3167,7 +3162,7 @@ select {
 .loading-spinner {
     border: 4px solid rgba(0, 0, 0, 0.1);
     border-radius: 50%;
-    border-top: 4px solid #3498db;
+    border-top: 4px solid #d9b1ff;
     width: 40px;
     height: 40px;
     animation: spin 1s linear infinite;
@@ -3179,11 +3174,6 @@ select {
     100% { transform: rotate(360deg); }
 }
 
-.loading-text {
-    text-align: center;
-    margin-top: 10px;
-    color: #666;
-}
 
 
 

@@ -148,7 +148,7 @@ export function setupGoogleButton() {
         'aiSigninButton3','aiSigninButton4','aiSigninButton5', 
         'aiSigninButton6','aiSigninButton7','aiSigninButton8',
         'aiSigninButton9','aiSigninButton10','aiSigninButton11',
-        'aiSigninButton12','aiSigninButton13'
+        'aiSigninButton12','aiSigninButton13', 'aiSigninButton14'
     ];
     aiIds.forEach(id => {
         const btn = document.getElementById(id);
