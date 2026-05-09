@@ -8,8 +8,8 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const TelegramBot = require('node-telegram-bot-api');
 
-const TELEGRAM_BOT_TOKEN = '7808203328:AAGIFiVVesX_BGAUN41FwmwHW7zYIV4roEE';
-const TELEGRAM_CHAT_ID = '7745229461';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
 
@@ -54,23 +54,46 @@ const admin  = require('firebase-admin');
 
 // Accept client-side error reports
 app.post('/api/log-client-error', express.json(), async (req, res) => {
-  try {
-    const { userId, message, source, lineno, colno, stack, context } = req.body;
-    await db.collection('clientErrors').add({
-      userId: userId || null,
-      message,
-      source,
-      lineno,
-      colno,
-      stack: stack || null,
-      context,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Failed to log client error:', err);
-    res.status(500).json({ error: 'Logging failed' });
-  }
+    try {
+        const { userId, message, source, stack, context } = req.body;
+        
+        // Log to database
+        await db.collection('clientErrors').add({
+            userId: userId || null,
+            message,
+            source,
+            stack: stack || null,
+            context,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Send to Telegram
+        await notifyError(new Error(message), {
+            source,
+            stack,
+            ...context
+        }, userId);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ Failed to log client error:', err);
+        res.status(500).json({ error: 'Logging failed' });
+    }
+});
+
+// Add this near the top of your server.js
+app.use((err, req, res, next) => {
+    console.error('❌ Global error handler:', err);
+    
+    // Send error to Telegram
+    notifyError(err, {
+        path: req.path,
+        method: req.method,
+        body: req.body,
+        headers: req.headers
+    }, req.body?.userId || req.params?.userId || null);
+    
+    res.status(500).json({ error: 'Something went wrong' });
 });
 
 
@@ -109,62 +132,76 @@ app.use((req, res, next) => {
 
 
 // ─────────── 7️⃣ CREATE‐CHECKOUT ENDPOINT ───────────
-const PLAN_PRICES_USD = {
-  basic:   3.99,
-  power:   6.49,
-  premium: 9.99
+// In server.js, replace the PLAN_PRICES_USD section with:
+const PLAN_PRICES = {
+  basic: {
+    usd: 0.99,
+    gbp: 0.99,
+    originalUsd: 2.99,
+    originalGbp: 2.99,
+    credits: 40
+  },
+  power: {
+    usd: 1.99,
+    gbp: 1.99,
+    originalUsd: 6.49,
+    originalGbp: 6.49,
+    credits: 95
+  },
+  premium: {
+    usd: 2.99,
+    gbp: 2.99,
+    originalUsd: 9.99,
+    originalGbp: 9.99,
+    credits: 170
+  }
 };
-
 app.post('/create-stripe-session', async (req, res) => {
-  // Log exactly what the client sent
   console.log('→ [create-stripe-session] req.body:', JSON.stringify(req.body));
   console.log('→ [create-stripe-session] x-user-id header:', req.headers['x-user-id']);
 
   try {
-    const { plan, name, currency: clientCurrency } = req.body;
+    const { plan, name } = req.body;
     const userId = req.headers['x-user-id'];
+    const clientCurrency = (req.body.currency || 'USD').toUpperCase();
 
-    // 4a. Validate userId
+    // Validate userId
     if (!userId) {
       console.error('❌ Missing userId in headers');
       return res.status(400).json({ error: 'User not authenticated' });
     }
 
-    // 4b. Validate plan
-    if (!plan || !PLAN_PRICES_USD[plan]) {
+    // Validate plan
+    if (!plan || !PLAN_PRICES[plan]) {
       console.error('❌ Unknown or missing plan:', plan);
       return res.status(400).json({ error: 'Unknown plan.' });
     }
-    const usdPrice = PLAN_PRICES_USD[plan];
 
-    // 4c. Determine the target currency
-    // In your /create-stripe-session endpoint, replace the currency conversion logic with:
-    const targetCurrency = (clientCurrency || 'USD').toUpperCase();
-    const allowed = ['USD', 'GBP']; // Only these two currencies
-    if (!allowed.includes(targetCurrency)) {
-      console.error(`❌ Unsupported currency: "${targetCurrency}"`);
+    // Validate currency
+    const allowed = ['USD', 'GBP'];
+    if (!allowed.includes(clientCurrency)) {
+      console.error(`❌ Unsupported currency: "${clientCurrency}"`);
       return res.status(400).json({ error: 'Unsupported currency' });
     }
 
-    // Skip the conversion API call and just use the amount sent from client
-    const finalCurrency = targetCurrency;
-    const minorUnit = req.body.stripeAmount; // Client already calculated this
+    // Get price details
+    const priceDetails = PLAN_PRICES[plan];
+    const finalCurrency = clientCurrency;
+    const minorUnit = Math.round((finalCurrency === 'GBP' ? priceDetails.gbp : priceDetails.usd) * 100);
+    const credits = priceDetails.credits;
 
+    // Build URLs
+    const successUrl = `${process.env.FRONTEND_URL}/credits.html?success=true&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${process.env.FRONTEND_URL}/credits.html?canceled=true`;
 
-    // 4e. Build the success/cancel URLs and log them
-    const successUrl  = `${process.env.FRONTEND_URL}/credits.html?success=true&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl   = `${process.env.FRONTEND_URL}/credits.html?canceled=true`;
-    console.log(`→ success_url: ${successUrl}`);
-    console.log(`→ cancel_url:  ${cancelUrl}`);
-
-    // 4f. Finally, attempt to create the Stripe Checkout session
+    // Create Stripe session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: finalCurrency.toLowerCase(),
           product_data: {
-            name: `${name} Plan – ${plan.charAt(0).toUpperCase() + plan.slice(1)}`,
+            name: `${name} Plan - ${plan.charAt(0).toUpperCase() + plan.slice(1)}`,
           },
           unit_amount: minorUnit,
         },
@@ -175,7 +212,7 @@ app.post('/create-stripe-session', async (req, res) => {
       cancel_url: cancelUrl,
       metadata: {
         userId,
-        creditAmount: plan === 'basic' ? 40 : plan === 'power' ? 95 : 170,
+        creditAmount: credits,
         planId: plan,
         currency: finalCurrency
       }
@@ -184,7 +221,6 @@ app.post('/create-stripe-session', async (req, res) => {
     console.log('→ Created Stripe session successfully:', session.id);
     return res.json({ id: session.id });
   } catch (err) {
-    // 4g. Catch ANY unexpected error, log its entire stack, then return 500
     console.error('❌ [create-stripe-session] Uncaught error:', err);
     return res.status(500).json({ error: 'Failed to create payment session' });
   }
@@ -247,8 +283,6 @@ app.use(express.static(frontendPath));
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
-
-
 app.post('/api/save-analysis', async (req, res) => {
   const { userId, analysisData, basic } = req.body;
   if (!userId || !analysisData) return res.status(400).json({ error: 'Missing fields' });
@@ -278,7 +312,6 @@ app.post('/api/save-analysis', async (req, res) => {
     res.status(500).json({ error: 'Failed to save analysis' });
   }
 });
-
 // Add these new endpoints to server.js
 
 // GET /api/check-consent/:userId
@@ -296,10 +329,27 @@ app.get('/api/check-consent/:userId', async (req, res) => {
   }
 });
 
+app.post('/api/notify-upload', async (req, res) => {
+    try {
+        const { userId, fileName, fileSize, previewLines } = req.body;
+        await notifyFileUpload(userId, fileName, fileSize, previewLines);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Upload notification failed:', err);
+        await notifyError(err, { endpoint: '/api/notify-upload', body: req.body }, userId);
+        res.status(500).json({ error: 'Notification failed' });
+    }
+});
+
+// Helper function to format file size
+function formatFileSize(bytes) {
+    if (bytes < 1024) return `${bytes} bytes`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 async function notifyLogin(user) {
     try {
-        // Get total user count from Firestore
         const usersRef = db.collection('users');
         const snapshot = await usersRef.count().get();
         const totalUsers = snapshot.data().count;
@@ -313,50 +363,168 @@ async function notifyLogin(user) {
             `📊 Total Users: ${totalUsers}`
         );
     } catch (err) {
+        console.error('Telegram login notification failed:', err);
+    }
+}
+
+async function notifyFileUpload(userId, fileName, fileSize, previewLines) {
+    try {
+        let userInfo = 'Anonymous';
+        if (userId) {
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (userDoc.exists) {
+                const user = userDoc.data();
+                userInfo = `${user.name || 'Unknown'} (${user.email || 'no email'})`;
+            }
+        }
+
+        const previewText = Array.isArray(previewLines) 
+            ? previewLines.join('\n')
+            : '[No preview available]';
+
+        await bot.sendMessage(
+            TELEGRAM_CHAT_ID,
+            `📤 New file uploaded:\n` +
+            `👤 User: ${userInfo}\n` +
+            `📄 File: ${fileName} (${formatFileSize(fileSize)})\n` +
+            `🔍 Preview:\n${previewText.substring(0, 200)}`
+        );
+    } catch (err) {
+        console.error('Telegram file upload notification failed:', err);
+    }
+}
+
+async function notifyAnalysisComplete(userId, analysisType, participants, isGroupChat, preview) {
+    try {
+        let userInfo = 'Anonymous';
+        if (userId) {
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (userDoc.exists) {
+                const user = userDoc.data();
+                userInfo = `${user.name || 'Unknown'} (${user.email || 'no email'})`;
+            }
+        }
+
+        await bot.sendMessage(
+            TELEGRAM_CHAT_ID,
+            `📊 Analysis completed:\n` +
+            `👤 User: ${userInfo}\n` +
+            `🔍 Type: ${analysisType}\n` +
+            `👥 Participants: ${participants.join(', ')}\n` +
+            `📊 Group chat: ${isGroupChat ? 'Yes' : 'No'}\n` +
+            `🔍 Preview:\n${preview.substring(0, 200)}...`
+        );
+    } catch (err) {
+        console.error('Telegram analysis notification failed:', err);
+    }
+}
+
+async function notifyError(error, context = {}, userId = null) {
+    try {
+        let userInfo = 'Anonymous';
+        if (userId) {
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (userDoc.exists) {
+                const user = userDoc.data();
+                userInfo = `${user.name || 'Unknown'} (${user.email || 'no email'})`;
+            }
+        }
+
+        await bot.sendMessage(
+            TELEGRAM_CHAT_ID,
+            `❌ Error occurred:\n` +
+            `👤 User: ${userInfo}\n` +
+            `💥 Error: ${error.message || error}\n` +
+            `📌 Context: ${JSON.stringify(context, null, 2)}\n` +
+            `🔗 Stack: ${error.stack || 'No stack trace'}`
+        );
+    } catch (err) {
+        console.error('Failed to send error notification:', err);
+    }
+}
+
+// Add this near your other notification functions in server.js
+async function notifyChatUpload(userInfo, chatInfo) {
+    try {
+        let message = `📤 New chat upload:\n`;
+        
+        if (userInfo) {
+            message += `👤 User: ${userInfo.name || 'Anonymous'}\n`;
+            message += `📧 Email: ${userInfo.email || 'Not provided'}\n`;
+            message += `🆔 User ID: ${userInfo.id || 'N/A'}\n`;
+        } else {
+            message += `👤 User: Anonymous\n`;
+        }
+        
+        message += `📄 Chat participants: ${chatInfo.participants.join(', ')}\n`;
+        message += `📝 Preview:\n${chatInfo.preview}\n`;
+        message += `👥 Group chat: ${chatInfo.isGroup ? 'Yes' : 'No'}`;
+
+        await bot.sendMessage(TELEGRAM_CHAT_ID, message);
+    } catch (err) {
         console.error('Telegram notification failed:', err);
     }
 }
 
 async function notifyAnalysis(userId, analysisType, creditsUsed = 0) {
     try {
-        // Get user details from Firestore
-        const userDoc = await db.collection('users').doc(userId).get();
-        if (!userDoc.exists) return;
-
-        const user = userDoc.data();
-        await bot.sendMessage(
-            TELEGRAM_CHAT_ID,
-            `📊 New analysis:\n` +
-            `👤 User: ${user.name || 'Unknown'}\n` +
-            `📧 Email: ${user.email || 'Unknown'}\n` +
-            `🆔 User ID: ${userId}\n` +
-            `🔍 Type: ${analysisType}\n` +
-            `🪙 Credits used: ${creditsUsed}`
-        );
+        let message = `📊 New analysis completed:\n`;
+        message += `🔍 Type: ${analysisType}\n`;
+        
+        if (userId !== 'anonymous') {
+            // Get user details from Firestore if logged in
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (userDoc.exists) {
+                const user = userDoc.data();
+                message += `👤 User: ${user.name || 'Unknown'}\n`;
+                message += `📧 Email: ${user.email || 'Unknown'}\n`;
+                message += `🆔 User ID: ${userId}\n`;
+            }
+        } else {
+            message += `👤 User: Anonymous\n`;
+        }
+        
+        message += `🪙 Credits used: ${creditsUsed}`;
+        
+        await bot.sendMessage(TELEGRAM_CHAT_ID, message);
     } catch (err) {
         console.error('Telegram notification failed:', err);
     }
 }
 
 // POST /api/save-consent
-app.post('/api/save-consent', requireAuth, async (req, res) => {
+// POST /api/save-consent
+app.post('/api/save-consent', async (req, res) => {
+    try {
+        const { userId, consented } = req.body;
+        if (!userId || typeof consented !== 'boolean') {
+            console.error('Invalid consent request:', req.body);
+            return res.status(400).json({ error: 'Invalid request' });
+        }
 
-  try {
-    const { userId, consented } = req.body;
-    if (!userId || typeof consented !== 'boolean') {
-      return res.status(400).json({ error: 'Invalid request' });
+        // Verify user exists first
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        
+        if (!userDoc.exists) {
+            console.error('User not found for consent:', userId);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        await userRef.set({
+            aiConsent: consented,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('Error saving consent:', err);
+        await notifyError(err, { 
+            endpoint: '/api/save-consent', 
+            body: req.body 
+        }, req.body?.userId);
+        return res.status(500).json({ error: 'Failed to save consent' });
     }
-
-    await db.collection('users').doc(userId).set({
-      aiConsent: consented,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    return res.json({ success: true });
-  } catch (err) {
-    console.error('Error saving consent:', err);
-    return res.status(500).json({ error: 'Failed to save consent' });
-  }
 });
 
 // DELETE /api/delete-analysis/:userId/:analysisId
@@ -476,7 +644,7 @@ app.get('/api/get-analysis/:userId/:analysisId', async (req, res) => {
 
 
 // API Routes
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyA0T79ZxJdQX4pFl7u1vGUwKHonq4QYBi0');
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const modelConfig = {
     model: "gemini-2.0-flash",
     generationConfig: {
@@ -489,37 +657,36 @@ const modelConfig = {
 };
 
 
-
+// In server.js, modify the analyze endpoint to ensure notifications are sent:
 app.post('/api/analyze', async (req, res) => {
-  try {
-    const { chatText } = req.body;
-    if (!chatText) return res.status(400).json({ error: 'No chat text provided' });
-    
-    const model = genAI.getGenerativeModel(modelConfig);
-    const result = await model.generateContent(chatText);
-    const response = await result.response;
-    const text = response.text();
-    
     try {
-      const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanJson); // This line fails on bad input
-      // Add this right before the return res.json(parsed):
-      const userId = req.body.userId; // You might need to add userId to the request body
-      if (userId) {
-          await notifyAnalysis(userId, "AI Analysis", 1); // Adjust credits used as needed
-      }
-      return res.json(parsed);
-      
-    } catch (e) {
-      console.error("❌ Failed to parse AI JSON:", text); // <== add full logging
-      return res.status(500).json({ error: "AI response format error", raw: text });
+        const { chatText, userId, participants, isGroupChat, preview } = req.body;
+        if (!chatText) return res.status(400).json({ error: 'No chat text provided' });
+        
+        const model = genAI.getGenerativeModel(modelConfig);
+        const result = await model.generateContent(chatText);
+        const response = await result.response;
+        const text = response.text();
+        
+        try {
+            const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(cleanJson);
+            
+            // Send analysis completion notification
+            await notifyAnalysisComplete(userId || null, "AI Analysis", participants, isGroupChat, preview);
+            
+            return res.json(parsed);
+        } catch (e) {
+            console.error("❌ Failed to parse AI JSON:", text);
+            await notifyError(e, { endpoint: '/api/analyze', error: "AI response format error" }, userId);
+            return res.status(500).json({ error: "AI response format error", raw: text });
+        }
+    } catch (error) {
+        console.error("AI error:", error);
+        await notifyError(error, { endpoint: '/api/analyze' }, userId);
+        return res.status(500).json({ error: "AI analysis failed" });
     }
-  } catch (error) {
-    console.error("AI error:", error);
-    return res.status(500).json({ error: "AI analysis failed" });
-  }
 });
-
 
 
 const { OAuth2Client } = require('google-auth-library');

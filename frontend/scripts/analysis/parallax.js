@@ -43,6 +43,7 @@ console.error = function (...args) {
             return data.hasConsented || false;
         } catch (error) {
             console.error('Error checking consent:', error);
+            showErrorToUser('Failed to check consent.', error);
             return false;
         }
     }
@@ -57,6 +58,7 @@ console.error = function (...args) {
             return response.ok;
         } catch (error) {
             console.error('Error saving consent:', error);
+            showErrorToUser('Failed to save consent.', error);
             return false;
         }
     }
@@ -96,6 +98,20 @@ console.error = function (...args) {
         processButton.disabled = false;
     }
 
+async function isZipFile(file) {
+    try {
+        if (file.type === 'application/zip') return true;
+        // fallback: peek at the first two bytes
+        const buffer = await file.slice(0, 4).arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        return bytes[0] === 0x50 && bytes[1] === 0x4B;
+    } catch (err) {
+        console.error('Error checking ZIP file:', err);
+        return false;
+    }
+}
+
+
 async function processFile(useAI = false) {
         console.log(`[LOG] About to call processSelectedFile(useAI=${useAI}) with file:`, window.selectedFile);
 
@@ -111,6 +127,38 @@ async function processFile(useAI = false) {
             return;
         }
 
+        let text;
+        if (await isZipFile(window.selectedFile)) {
+            const arrayBuffer = await window.selectedFile.arrayBuffer();
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
+            if (!txtFile) {
+                console.warn('No .txt file found in ZIP:', window.selectedFile.name);
+                return;
+            }
+            text = await zip.files[txtFile].async('text');
+        } else {
+            text = await window.selectedFile.text();
+        }
+
+
+        const participants = new Set();
+        const lines = text.split('\n').slice(0, 100);
+        const regex = /^\[?\d{1,2}\/\d{1,2}\/\d{4}.*?\] ?([^:]+):/gm;
+        
+        let match;
+        for (const line of lines) {
+            match = regex.exec(line);
+            if (match) {
+                participants.add(match[1].trim());
+            }
+        }
+
+        const preview = text.split('\n').slice(0, 2).join('\n');
+        window.analysisParticipants = Array.from(participants);
+        window.analysisPreview = preview;
+
+
         // Check credits if using AI
         if (useAI) {
             const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -121,7 +169,6 @@ async function processFile(useAI = false) {
                     const needed = window.currentCreditsNeeded || 1;
                     
                     if (credits < needed) {
-                        showNoCreditsPopup(needed, credits);
                         // Fall back to basic analysis
                         await window.processSelectedFile(false);
                         try {
@@ -138,11 +185,13 @@ async function processFile(useAI = false) {
                             }
                         } catch (e) {
                             console.error('Failed to log analysis:', e);
+                            showErrorToUser('Failed to log analysis.', e);
                         }
                             return;
                         }
                 } catch (creditError) {
                     console.error('Credit check failed:', creditError);
+                    showErrorToUser('Failed to check credits.', creditError);
                     // Fall back to basic analysis
                     await window.processSelectedFile(false);
                     return;
@@ -165,6 +214,7 @@ async function processFile(useAI = false) {
             }
         } catch (e) {
             console.error('Failed to log analysis:', e);
+            showErrorToUser('Failed to log analysis.', e);
         }
     } catch (error) {
         console.error('Error processing file:', error);
@@ -177,7 +227,8 @@ async function processFile(useAI = false) {
 }
 
 // Helper to show errors to the user
-function showErrorToUser(message) {
+function showErrorToUser(message, error = null) {
+    // Show to user
     const errorDiv = document.createElement('div');
     errorDiv.className = 'error-message';
     errorDiv.style.cssText = `
@@ -187,58 +238,96 @@ function showErrorToUser(message) {
     errorDiv.textContent = message;
     document.body.appendChild(errorDiv);
     setTimeout(() => errorDiv.remove(), 5000);
+
+    // Log to server
+    if (error) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        try {
+            fetch('/api/log-client-error', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    userId: user.sub || null,
+                    message: message,
+                    source: window.location.href,
+                    stack: error.stack,
+                    context: {
+                        action: window.currentAction || 'unknown',
+                        userAgent: navigator.userAgent
+                    }
+                })
+            });
+        } catch (err) {
+            console.error('Failed to log client error:', err);
+            showErrorToUser('An error occurred while logging the error.', err);
+        }
+    }
 }
+
+// Then update all your catch blocks to use it:
+
 
 function setupConsentButtons() {
     if (agreeConsentBtn && declineConsentBtn) {
         agreeConsentBtn.addEventListener('click', async () => {
-            window.currentAction = 'consent:agree';
+    window.currentAction = 'consent:agree';
 
-            try {
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                if (!user.sub) {
-                    console.error('No user ID found');
-                    hideConsentPopup();
-                    await processFile(false); // Fallback to basic
-                    return;
-                }
+    try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!user.sub) {
+            console.error('No user ID found');
+            hideConsentPopup();
+            await processFile(false); // Fallback to basic
+            return;
+        }
 
-                // Save consent and immediately proceed
-                const consentSaved = await saveConsent(user.sub, true);
-                if (!consentSaved) {
-                    console.error('Failed to save consent');
-                }
-                hideConsentPopup();
-                
-                // Show processing indicator immediately
-                startProcessing();
-                
-                // Check credits and process accordingly
-                try {
-                    const creditResp = await fetch(`/api/user-credits/${user.sub}`);
-                    const { credits = 0 } = await creditResp.json();
-                    const needed = window.currentCreditsNeeded || 1;
-                    
-                    if (credits < needed) {
-                        showNoCreditsPopup(needed, credits);
-                        // Fallback to basic analysis
-                        await processFile(false);
-                    } else {
-                        // Proceed with AI analysis
-                        await processFile(true);
-                    }
-                } catch (creditError) {
-                    console.error('Credit check failed:', creditError);
-                    // Fallback to basic analysis
-                    await processFile(false);
-                }
-            } catch (err) {
-                console.error('Consent agreement failed:', err);
-                hideConsentPopup();
+        // Save consent
+        const response = await fetch('/api/save-consent', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                userId: user.sub,
+                consented: true
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save consent');
+        }
+
+        hideConsentPopup();
+        
+        // Show processing indicator immediately
+        startProcessing();
+        
+        // Check credits and process accordingly
+        try {
+            const creditResp = await fetch(`/api/user-credits/${user.sub}`);
+            const { credits = 0 } = await creditResp.json();
+            const needed = window.currentCreditsNeeded || 1;
+            
+            if (credits < needed) {
                 // Fallback to basic analysis
                 await processFile(false);
+            } else {
+                // Proceed with AI analysis
+                await processFile(true);
             }
-        });
+        } catch (creditError) {
+            console.error('Credit check failed:', creditError);
+            showErrorToUser('Credit check failed', creditError);
+            // Fallback to basic analysis
+            await processFile(false);
+        }
+    } catch (err) {
+        console.error('Consent agreement failed:', err);
+        showErrorToUser('Failed to save consent', err);
+        hideConsentPopup();
+        // Fallback to basic analysis
+        await processFile(false);
+    }
+});
 
         declineConsentBtn.addEventListener('click', async () => {
             window.currentAction = 'consent:decline';
@@ -253,6 +342,7 @@ function setupConsentButtons() {
                 await processFile(false);
             } catch (err) {
                 console.error('Consent decline failed:', err);
+                showErrorToUser('Failed to save consent decline.', err);
                 hideConsentPopup();
                 // Fallback to basic analysis
                 await processFile(false);
@@ -346,7 +436,6 @@ function setupConsentButtons() {
             const { credits = 0 } = await creditResp.json();
 
             if (credits < needed) {
-                showNoCreditsPopup(needed, credits);
                 // Fallback to basic analysis
                 aiToggle.checked = false;
                 await runBasicWithEncouragement();
@@ -454,11 +543,52 @@ function showNoCreditsPopup(needed = 1, current = 0) {
 
         // 4) “handleFiles” is called by both drag/drop and fileInput.change
         async function handleFiles(files) {
-            if (!files.length) return;
+    if (!files.length) return;
 
-            isFileUploaded = true;
-            const file = files[0];
-            window.selectedFile = file;
+    isFileUploaded = true;
+    const file = files[0];
+    window.selectedFile = file;
+    
+    // Get preview lines - updated to handle ZIP files
+    let previewLines = [];
+    try {
+        if (await isZipFile(file)) {
+            const arrayBuffer = await file.arrayBuffer();
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
+            if (txtFile) {
+                const text = await zip.files[txtFile].async('text');
+                previewLines = text.split('\n').slice(0, 5);
+            } else {
+                previewLines = ['[ZIP file contains no .txt file]'];
+            }
+        } else {
+            const text = await file.text();
+            previewLines = text.split('\n').slice(0, 5);
+        }
+    } catch (err) {
+        console.error('Error getting preview:', err);
+        previewLines = ['Could not read preview'];
+    }
+
+    // Send upload notification
+    try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        await fetch('/api/notify-upload', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                userId: user.sub || null,
+                fileName: file.name,
+                fileSize: file.size,
+                previewLines: previewLines
+            })
+        });
+    } catch (err) {
+        console.error('Failed to send upload notification:', err);
+        showErrorToUser('Failed to notify server about file upload.', err);
+    }
+
             fileName.textContent = file.name;
             console.log('Selected file:', file.name);
             fileInfo.style.display = 'flex';
@@ -477,48 +607,49 @@ function showNoCreditsPopup(needed = 1, current = 0) {
 
             // (b) **Immediately read first ~100 lines and look for “distinct senders”**
             let isGroup = false;
+            const participants = new Set(); // Create participants Set here
             try {
-                let text;
-                if (await isZipFile(file)) {
-                    console.log('Detected ZIP by content/MIME, even if name lacks .zip');
-                    const arrayBuffer = await file.arrayBuffer();
-                    const zip = await JSZip.loadAsync(arrayBuffer);
-                    const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
-                    // if no .txt file found, console log 
-                    if (!txtFile) {
-                        console.warn('No .txt file found in ZIP:', file.name);
-                        return;
-                    }
-                    console.log('Reading text from ZIP file:', txtFile);
-                    text = await zip.files[txtFile].async('text');
-                } else {
-                    text = await file.text();
-                }
+        let text;
+        if (await isZipFile(file)) {
+            const arrayBuffer = await file.arrayBuffer();
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            const txtFile = Object.keys(zip.files).find(f => f.endsWith('.txt'));
+            if (!txtFile) {
+                console.warn('No .txt file found in ZIP:', file.name);
+                return;
+            }
+            text = await zip.files[txtFile].async('text');
+        } else {
+            text = await file.text();
+        }
 
-                // Only proceed if we got valid text content
-                if (typeof text === 'string') {
-                    const preview = text.split('\n').slice(0, 200);
-                console.log('[LOG] parallax.handleFiles preview of first 200 lines:');
-                preview.forEach((l, i) => console.log(`${i+1}: ${l}`));
-                    const regex = /^\[?\d{1,2}\/\d{1,2}\/\d{4}.*?\] ?([^:]+):/gm;
-                    
-                    const senders = new Set();
-                    let match;
+        if (typeof text === 'string') {
+            const preview = text.split('\n').slice(0, 200);
+            console.log('[LOG] parallax.handleFiles preview of first 200 lines:');
+            preview.forEach((l, i) => console.log(`${i+1}: ${l}`));
+            
+            const regex = /^\[?\d{1,2}\/\d{1,2}\/\d{4}.*?\] ?([^:]+):/gm;
+            let match;
 
-                    const lines = text.split('\n').slice(0, 100);
-                    for (const line of lines) {
-                        match = regex.exec(line);
-                        if (match) {
-                            senders.add(match[1].trim());
-                            if (senders.size > 2) {
-                                isGroup = true;
-                                break;
-                            }
-                        }
+            const lines = text.split('\n').slice(0, 100);
+            for (const line of lines) {
+                match = regex.exec(line);
+                if (match) {
+                    participants.add(match[1].trim());
+                    if (participants.size > 2) {
+                        isGroup = true;
+                        break;
                     }
                 }
+            }
+
+            // SET THE PARTICIPANTS HERE - after we've extracted them
+            window.analysisParticipants = Array.from(participants);
+            window.analysisPreview = preview.join('\n'); // Also set the preview
+        }
             } catch (err) {
                 console.error('Group chat detection failed:', err);
+                showErrorToUser('Group chat detection failed:', err);
                 // Fallback to assuming it's not a group chat if we can't determine
                 isGroup = false;
             }
@@ -542,17 +673,6 @@ function showNoCreditsPopup(needed = 1, current = 0) {
             return file.size;
         }
 
-        async function isZipFile(file) {
-    if (file.type === 'application/zip') return true;
-    // fallback: peek at the first two bytes
-    const buffer = await file.slice(0, 4).arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B;
-    if (isZip) {
-        console.log(`Detected ZIP file by magic header (not by name): ${file.name}`);
-    }
-    return isZip;
-}
 
 
         // 5) Wire up drag/drop events to “handleFiles”
@@ -593,16 +713,16 @@ function showNoCreditsPopup(needed = 1, current = 0) {
 
         // 7) When user selects via the native file‐picker
         fileInput.addEventListener('change', function() {
-            if (this.files.length) {
-                // show content of files in the console with a loop
-                console.log('Selected files:', this.files);
-                for (let i = 0; i < this.files.length; i++) {
-                    console.log(this.files[i].name);
-                }
-                
-                handleFiles(this.files);
-            }
+    if (this.files.length) {
+        const file = this.files[0];
+        console.log('File details:', {
+            name: file.name,
+            size: file.size,
+            type: file.type
         });
+        handleFiles(this.files);
+    }
+});
 
         // 8) “Clear file” button: reset everything back to “no file uploaded” state
         clearFile.addEventListener('click', function(e) {

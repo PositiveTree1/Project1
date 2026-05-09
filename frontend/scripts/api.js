@@ -105,6 +105,7 @@ export async function getCredits(userId) {
         throw error;
     }
   }
+// api.js - fixed version
 export async function saveAnalysisHTML(userId, { html, metadata }, basic) {
     const res = await fetch('/api/save-analysis', {
         method: 'POST',

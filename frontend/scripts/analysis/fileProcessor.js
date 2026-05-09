@@ -246,6 +246,34 @@ export async function processSelectedFile() {
     }
 }
 
+function showNoCreditsPopup(needed = 1, current = 0) {
+  const popup = document.createElement("div");
+  popup.className = "ai-popup";
+  popup.innerHTML = `
+    <div class="ai-popup-content">
+      <div class="ai-popup-progress">
+        <div class="ai-popup-progress-bar2"></div>
+      </div>
+      <div class="ai-popup-header">
+        <h3 class="ai-popup-title">Not Enough Credits</h3>
+        <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
+      </div>
+      <p class="ai-popup-message">
+        You dont have enough credits to run the AI analysis, basic analysis will still be shown.
+      </p>
+      <p class="ai-popup-message">
+        Please <a href="/credits.html" style="color: #007BFF;">buy more credits</a> to continue.
+      </p>
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+  setTimeout(() => popup.remove(), 5000);
+  popup.addEventListener('click', e => {
+    if (e.target === popup) popup.remove();
+  });
+}
+
 // Helper function to read file content
 async function readFileContent(file) {
     return new Promise((resolve, reject) => {
@@ -373,33 +401,7 @@ function showChatTooShortPopup() {
     });
 }
 
-function showNoCreditsPopup(needed = 1, current = 0) {
-  const popup = document.createElement("div");
-  popup.className = "ai-popup";
-  popup.innerHTML = `
-    <div class="ai-popup-content">
-      <div class="ai-popup-progress">
-        <div class="ai-popup-progress-bar2"></div>
-      </div>
-      <div class="ai-popup-header">
-        <h3 class="ai-popup-title">Not Enough Credits</h3>
-        <button class="close-popup" onclick="this.closest('.ai-popup').remove()">×</button>
-      </div>
-      <p class="ai-popup-message">
-        You dont have enough credits to run the AI analysis, basic analysis will still be shown.
-      </p>
-      <p class="ai-popup-message">
-        Please <a href="/credits.html" style="color: #007BFF;">buy more credits</a> to continue.
-      </p>
-    </div>
-  `;
 
-  document.body.appendChild(popup);
-  setTimeout(() => popup.remove(), 5000);
-  popup.addEventListener('click', e => {
-    if (e.target === popup) popup.remove();
-  });
-}
 
 
   
@@ -672,7 +674,6 @@ function processChatLogFile(text) {
     return true;
 
 }
-
 
 window.initFileProcessor = initFileProcessor;
 window.processSelectedFile = processSelectedFile;

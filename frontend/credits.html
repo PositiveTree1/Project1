@@ -60,6 +60,38 @@
         display: inline-block;
         margin-bottom: 10px;
       }
+      
+  /* Add these styles to your existing style block */
+  .price {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px 0;
+  }
+  
+  .original-price {
+    text-decoration: line-through;
+    color: #999;
+    font-size: 0.9em;
+  }
+  
+  .current-price {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #4f46e5;
+  }
+  
+  .discount-badge {
+    background-color: #4f46e5;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-top: 5px;
+  }
+</style>
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
@@ -140,60 +172,75 @@
     </div>
 
     <div class="pricing-plans">
-      <!-- Basic Plan -->
-      <div class="pricing-card">
-        <div class="pricing-header">
-          <h3>Basic</h3>
-         <div class="price" data-usd-price="3.99"></div>
-
-          <div class="credits-amount">40 Credits</div>
-        </div>
-        <div class="pricing-features">
-          <ul>
-            <li>✔ Full AI insights</li>
-            <li>✔ Understand your conversations</li>
-            <li>✔ Fix issues within your chats and relationships</li>
-          </ul>
-        </div>
-        <button class="cta-button select-plan" data-plan="basic" data-amount="40" data-usd-price="3.99">Get Started</button>
+  <!-- Basic Plan -->
+  <div class="pricing-card">
+    <div class="pricing-header">
+      <h3>Basic</h3>
+      <div class="price" data-usd-price="0.99" data-gbp-price="0.99" 
+          data-usd-original-price="2.99" data-gbp-original-price="2.99">
+        <span class="original-price" data-currency="$">2.99</span>
+        <span class="current-price" data-currency="$">0.99</span>
       </div>
-
-      <!-- Popular Plan -->
-      <div class="pricing-card popular">
-        <div class="popular-badge">POPULAR</div>
-        <div class="pricing-header">
-          <h3>Power User</h3>
-          <div class="price" data-usd-price="6.49"></div>
-          <div class="credits-amount">95 Credits</div>
-        </div>
-        <div class="pricing-features">
-          <ul>
-            <li>✔ 30% savings</li>
-            <li>✔ Full AI insights</li>
-            <li>✔ Understand your conversations</li>
-            <li>✔ Fix issues within your chats and relationships</li>
-          </ul>
-        </div>
-        <button class="cta-button select-plan" data-plan="power" data-amount="95" data-usd-price="6.49">Get Started</button>
-      </div>
-
-      <!-- Premium Plan -->
-      <div class="pricing-card">
-        <div class="pricing-header">
-          <h3>Premium</h3>
-          <div class="price" data-usd-price="9.99"></div>
-          <div class="credits-amount">170 Credits</div>
-        </div>
-        <div class="pricing-features">
-          <ul>
-            <li>✔ 40% savings</li>
-            <li>✔ Enough for enormous chats</li>
-            <li>✔ Everything in the Basic pack</li>
-          </ul>
-        </div>
-        <button class="cta-button select-plan" data-plan="premium" data-amount="170" data-usd-price="9.99">Get Started</button>
-      </div>
+      <div class="credits-amount">40 Credits</div>
+      <div class="discount-badge">Save 65%</div>
     </div>
+    <div class="pricing-features">
+      <ul>
+        <li>✔ Full AI insights</li>
+        <li>✔ Understand your conversations</li>
+        <li>✔ Fix issues within your chats and relationships</li>
+      </ul>
+    </div>
+    <button class="cta-button select-plan" data-plan="basic" data-amount="40" data-usd-price="0.99" data-gbp-price="0.99">Get Started</button>
+  </div>
+
+  <!-- Popular Plan -->
+  <div class="pricing-card popular">
+    <div class="popular-badge">POPULAR</div>
+    <div class="pricing-header">
+      <h3>Power User</h3>
+      <div class="price" data-usd-price="1.99" data-gbp-price="1.99" 
+          data-usd-original-price="6.49" data-gbp-original-price="6.49">
+        <span class="original-price" data-currency="$">6.49</span>
+        <span class="current-price" data-currency="$">1.99</span>
+      </div>
+      <div class="credits-amount">95 Credits</div>
+      <div class="discount-badge">Save 70%</div>
+    </div>
+    <div class="pricing-features">
+      <ul>
+        <li>✔ 70% savings</li>
+        <li>✔ Full AI insights</li>
+        <li>✔ Understand your conversations</li>
+        <li>✔ Fix issues within your chats and relationships</li>
+      </ul>
+    </div>
+    <button class="cta-button select-plan" data-plan="power" data-amount="95" data-usd-price="1.99" data-gbp-price="1.99">Get Started</button>
+  </div>
+
+  <!-- Premium Plan -->
+  <div class="pricing-card">
+    <div class="pricing-header">
+      <h3>Premium</h3>
+      <div class="price" data-usd-price="2.99" data-gbp-price="2.99" 
+          data-usd-original-price="9.99" data-gbp-original-price="9.99">
+        <span class="original-price" data-currency="$">9.99</span>
+        <span class="current-price" data-currency="$">2.99</span>
+      </div>
+      <div class="credits-amount">170 Credits</div>
+      <div class="discount-badge">Save 70%</div>
+    </div>
+    <div class="pricing-features">
+      <ul>
+        <li>✔ 70% savings</li>
+        <li>✔ Enough for enormous chats</li>
+        <li>✔ Maximise pattern detection</li>
+        <li>✔ Everything in the Basic pack</li>
+      </ul>
+    </div>
+    <button class="cta-button select-plan" data-plan="premium" data-amount="170" data-usd-price="2.99" data-gbp-price="2.99">Get Started</button>
+  </div>
+</div>
 
     <!-- Payment Section -->
     <div class="payment-section" id="paymentSection">
@@ -287,124 +334,90 @@
   const stripe = Stripe('pk_live_51RT0vbHxX0u6szgbLpwT76FbcrAp7VlREAHwUCcERzsVDBBHYuncpjb9pp2JxzWE5fomVJ1Muu4k48EPQ1A6Mmz8004IQgrFnP');
 
   document.addEventListener('DOMContentLoaded', async () => {
-    // ─── SIMPLIFIED CURRENCY HANDLING ───────────────────────────────────────
-    // 1) Detect user's preferred currency based on browser language or location
-    let currency = 'USD'; // default
-    const userLanguage = navigator.language || 'en-US';
-    const isUK = userLanguage.includes('en-GB') || userLanguage.includes('en-UK');
+  // Detect user's preferred currency
+  let currency = 'USD';
+  const userLanguage = navigator.language || 'en-US';
+  const isUK = userLanguage.includes('en-GB') || userLanguage.includes('en-UK');
+  
+  if (isUK) {
+    currency = 'GBP';
+  }
+
+  window.selectedCurrency = currency;
+  const symbol = currency === 'GBP' ? '£' : '$';
+
+  // Update all displayed prices based on currency
+  document.querySelectorAll('.price').forEach(priceEl => {
+    const usdPrice = priceEl.dataset.usdPrice;
+    const gbpPrice = priceEl.dataset.gbpPrice;
+    const usdOriginal = priceEl.dataset.usdOriginalPrice;
+    const gbpOriginal = priceEl.dataset.gbpOriginalPrice;
     
-    // Alternatively, you could use geolocation (but requires permission)
-    // For now, we'll just use language detection
-    if (isUK) {
-      currency = 'GBP';
-    }
+    const currentPrice = currency === 'GBP' ? gbpPrice : usdPrice;
+    const originalPrice = currency === 'GBP' ? gbpOriginal : usdOriginal;
+    
+    priceEl.querySelector('.current-price').textContent = symbol + currentPrice;
+    priceEl.querySelector('.original-price').textContent = symbol + originalPrice;
+  });
+    // Remove any exchange rate calculations
+    // We'll just use the prices as defined in the HTML
 
-    // 2) Define our fixed exchange rates (no API needed)
-    const exchangeRates = {
-      USD: 1,
-      GBP: 0.79 // Example rate, adjust as needed
-    };
-
-    // 3) Update all price displays
-    document.querySelectorAll('.price[data-usd-price]').forEach(el => {
-      const usdPrice = parseFloat(el.dataset.usdPrice);
-      let displayPrice, minorUnit;
-      
-      if (currency === 'GBP') {
-        const gbpPrice = usdPrice * exchangeRates.GBP;
-        displayPrice = '£' + gbpPrice.toFixed(2);
-        minorUnit = Math.round(gbpPrice * 100);
-        el.dataset.currency = 'GBP';
-      } else {
-        displayPrice = '$' + usdPrice.toFixed(2);
-        minorUnit = Math.round(usdPrice * 100);
-        el.dataset.currency = 'USD';
-      }
-      
-      el.innerText = displayPrice;
-      el.dataset.minorUnit = minorUnit;
-    });
-
-    // 4) Expose for later use
-    window.selectedCurrency = currency;
-
-    // ─── REST OF YOUR EXISTING CODE ─────────────────────────────────────────
-    // (Keep all the plan selection and Stripe checkout logic the same)
     let selectedPlan = null;
     document.querySelectorAll('.select-plan').forEach(button => {
       button.addEventListener('click', () => {
+        const card = button.closest('.pricing-card');
+        const priceEl = card.querySelector('.price');
+        const symbol = currency === 'GBP' ? '£' : '$';
+        
         selectedPlan = {
           id: button.dataset.plan,
           amount: button.dataset.amount,
-          price: button.dataset.usdPrice,
-          name: button.closest('.pricing-card').querySelector('h3').textContent
+          price: currency === 'GBP' ? button.dataset.gbpPrice : button.dataset.usdPrice,
+          name: card.querySelector('h3').textContent,
+          currency: currency
         };
         console.log('Plan selected:', selectedPlan);
 
-        // highlight
+        // Highlight selected card
         document.querySelectorAll('.pricing-card').forEach(card => {
           card.classList.remove('selected');
         });
-        button.closest('.pricing-card').classList.add('selected');
+        card.classList.add('selected');
 
-        // update UI
-        document.getElementById('selectedPlanName').innerText = selectedPlan.name;
-        document.getElementById('selectedPlanCredits').innerText = selectedPlan.amount + ' Credits';
-        const priceEl = document.querySelector(`.price[data-usd-price="${selectedPlan.price}"]`);
-        const symbol = currency === 'GBP' ? '£' : '$';
-        const convertedPrice = currency === 'GBP' 
-          ? (parseFloat(selectedPlan.price) * exchangeRates.GBP).toFixed(2)
-          : selectedPlan.price;
-        document.getElementById('selectedPlanPrice').innerText = symbol + convertedPrice;
-
+        // Update UI with selected plan
+        document.getElementById('selectedPlanName').textContent = selectedPlan.name;
+        document.getElementById('selectedPlanCredits').textContent = selectedPlan.amount + ' Credits';
+// In your plan selection handler:
+        document.getElementById('selectedPlanPrice').textContent = symbol + selectedPlan.price;
         document.getElementById('paymentSection').style.display = 'block';
         document.getElementById('paymentSection').scrollIntoView({ behavior: 'smooth' });
       });
     });
 
-    // Stripe click handler remains the same
+    // Stripe checkout handler
     document.querySelector('.stripe-checkout').addEventListener('click', async function() {
       if (!selectedPlan) {
         alert('Please select a plan first');
         return;
       }
+      
       this.disabled = true;
       this.textContent = 'Processing…';
 
       try {
-        // Wait for GoogleAuth userId
-        const userId = await new Promise(resolve => {
-          const check = () => {
-            const id = localStorage.getItem('userId');
-            if (id) resolve(id);
-            else setTimeout(check, 100);
-          };
-          check();
-        });
+        const userId = localStorage.getItem('userId');
         if (!userId) throw new Error('User not authenticated');
-
-        // Compute stripeAmount based on selected currency
-        const usdPrice = parseFloat(selectedPlan.price);
-        let stripeAmount, finalCurrency;
-        
-        if (window.selectedCurrency === 'GBP') {
-          finalCurrency = 'GBP';
-          stripeAmount = Math.round(usdPrice * exchangeRates.GBP * 100);
-        } else {
-          finalCurrency = 'USD';
-          stripeAmount = Math.round(usdPrice * 100);
-        }
 
         console.log('About to send to server:', {
           plan: selectedPlan.id,
           amount: selectedPlan.amount,
           name: selectedPlan.name,
-          currency: finalCurrency,
-          stripeAmount,
+          currency: selectedPlan.currency,
+          price: selectedPlan.price,
           userId
         });
 
-        // POST to server
+        // POST to server - let the server handle the exact pricing
         const resp = await fetch('/create-stripe-session', {
           method: 'POST',
           headers: {
@@ -413,10 +426,8 @@
           },
           body: JSON.stringify({
             plan: selectedPlan.id,
-            amount: selectedPlan.amount,
             name: selectedPlan.name,
-            currency: finalCurrency,
-            stripeAmount
+            currency: selectedPlan.currency
           })
         });
         
@@ -429,7 +440,7 @@
         const { id: sessionId } = await resp.json();
         console.log('Stripe session ID:', sessionId);
 
-        // Redirect
+        // Redirect to Stripe checkout
         const { error } = await stripe.redirectToCheckout({ sessionId });
         if (error) throw error;
       } catch (err) {
@@ -443,7 +454,25 @@
 </script>
 
 
-
+<script>
+  // FAQ functionality
+  document.querySelectorAll('.faq-question').forEach(question => {
+    question.addEventListener('click', () => {
+      const faqItem = question.closest('.faq-item');
+      const isActive = faqItem.classList.contains('active');
+      
+      // Close all other FAQs first
+      document.querySelectorAll('.faq-item').forEach(item => {
+        if (item !== faqItem) {
+          item.classList.remove('active');
+        }
+      });
+      
+      // Toggle current FAQ
+      faqItem.classList.toggle('active', !isActive);
+    });
+  });
+</script>
 
 
 
